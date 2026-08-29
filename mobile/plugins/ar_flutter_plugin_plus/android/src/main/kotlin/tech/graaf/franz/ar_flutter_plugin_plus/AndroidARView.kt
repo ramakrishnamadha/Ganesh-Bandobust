@@ -677,7 +677,14 @@ internal class AndroidARView(
             3 -> config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
             else -> config.planeFindingMode = Config.PlaneFindingMode.DISABLED
         }
-        config.depthMode = Config.DepthMode.DISABLED
+        config.depthMode =
+            if (session!!.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                Log.i(TAG, "ARCore Depth API supported - enabling AUTOMATIC depth mode")
+                Config.DepthMode.AUTOMATIC
+            } else {
+                Log.w(TAG, "ARCore Depth API not supported - keeping depth mode DISABLED")
+                Config.DepthMode.DISABLED
+            }
         config.updateMode = Config.UpdateMode.BLOCKING
         config.focusMode = Config.FocusMode.AUTO
         session!!.configure(config)
@@ -1279,11 +1286,32 @@ internal class AndroidARView(
             val centerY = height / 2f
             val allHitResults = frame.hitTest(centerX, centerY)
 
+            if (allHitResults.isNotEmpty()) {
+                val hitTypes = allHitResults.joinToString(", ") { hit ->
+                    when (hit.trackable) {
+                        is DepthPoint -> "DepthPoint"
+                        is Plane -> "Plane"
+                        is Point -> "Point"
+                        else -> hit.trackable.javaClass.simpleName
+                    }
+                }
+
+                Log.i(
+                    TAG,
+                    "CENTER_HIT_TYPES: $hitTypes"
+                )
+            } else {
+                Log.i(TAG, "CENTER_HIT_TYPES: NO_HIT")
+            }
+
             val planeAndPointHitResults = allHitResults.filter { hit ->
                 when (val trackable = hit.trackable) {
                     is Plane ->
                         trackable.trackingState == TrackingState.TRACKING &&
                         trackable.isPoseInPolygon(hit.hitPose)
+
+                    is DepthPoint ->
+                        trackable.trackingState == TrackingState.TRACKING
 
                     is Point ->
                         trackable.trackingState == TrackingState.TRACKING
@@ -1322,6 +1350,7 @@ internal class AndroidARView(
                 when (val trackable = hit.trackable) {
                     is Plane -> trackable.trackingState == TrackingState.TRACKING &&
                             trackable.isPoseInPolygon(hit.hitPose)
+                    is DepthPoint -> trackable.trackingState == TrackingState.TRACKING
                     is Point -> trackable.trackingState == TrackingState.TRACKING
                     else -> false
                 }

@@ -1,7 +1,9 @@
-import 'idol_verification_screen.dart';
-import 'mandap_verification_screen.dart';
-import 'location_verification_screen.dart';
 import 'package:flutter/material.dart';
+
+import 'location_verification_screen.dart';
+import 'mandap_verification_screen.dart';
+import 'idol_verification_screen.dart';
+import 'route_verification_screen.dart';
 
 class PreInstallationScreen extends StatelessWidget {
   final String applicationId;
@@ -32,7 +34,7 @@ class PreInstallationScreen extends StatelessWidget {
       {
         'number': '4',
         'title': 'Route-Based Verification',
-        'status': 'Pending',
+        'status': 'Ready',
       },
       {
         'number': '5',
@@ -62,19 +64,14 @@ class PreInstallationScreen extends StatelessWidget {
           'Pre-Installation Verification',
         ),
       ),
-
       body: Column(
         children: [
           Container(
             width: double.infinity,
             color: const Color(0xFFEFF6FF),
-
             padding: const EdgeInsets.all(16),
-
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'APPLICATION',
@@ -84,7 +81,7 @@ class PreInstallationScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
+                const SizedBox(height: 4),
                 Text(
                   applicationId,
                   style: const TextStyle(
@@ -101,7 +98,6 @@ class PreInstallationScreen extends StatelessWidget {
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: modules.length,
-
               itemBuilder: (context, index) {
                 final module = modules[index];
 
@@ -116,7 +112,6 @@ class PreInstallationScreen extends StatelessWidget {
                     leading: CircleAvatar(
                       backgroundColor:
                           const Color(0xFF17365D),
-
                       child: Text(
                         module['number']!,
                         style: const TextStyle(
@@ -135,7 +130,6 @@ class PreInstallationScreen extends StatelessWidget {
 
                     subtitle: Text(
                       module['status']!,
-
                       style: TextStyle(
                         color: ready
                             ? Colors.green
@@ -151,64 +145,85 @@ class PreInstallationScreen extends StatelessWidget {
                             Icons.lock_outline,
                           ),
 
-              onTap: ready
-    ? () {
-        if (index == 0) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  LocationVerificationScreen(
-                applicationId:
-                    applicationId,
-              ),
-            ),
-          );
+                    onTap: ready
+                        ? () {
+                            // MODULE 1
+                            // Location-Based Verification
+                            if (index == 0) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LocationVerificationScreen(
+                                    applicationId:
+                                        applicationId,
+                                  ),
+                                ),
+                              );
 
-          return;
-        }
+                              return;
+                            }
 
-        if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  MandapVerificationScreen(
-                applicationId:
-                    applicationId,
-              ),
-            ),
-          );
+                            // MODULE 2
+                            // Mandap-Based Verification
+                            if (index == 1) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      MandapVerificationScreen(
+                                    applicationId:
+                                        applicationId,
+                                  ),
+                                ),
+                              );
 
-          return;
-        }
+                              return;
+                            }
 
-        if (index == 2) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  IdolVerificationScreen(
-                applicationId:
-                    applicationId,
-              ),
-            ),
-          );
+                            // MODULE 3
+                            // Idol-Based Verification
+                            if (index == 2) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      IdolVerificationScreen(
+                                    applicationId:
+                                        applicationId,
+                                  ),
+                                ),
+                              );
 
-          return;
-        }
+                              return;
+                            }
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${module['title']} will be developed next.',
-            ),
-          ),
-        );
-      }
-    : null,
+                            // MODULE 4
+                            // Route-Based Verification
+                            if (index == 3) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const RouteVerificationScreen(),
+                                ),
+                              );
+
+                              return;
+                            }
+
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${module['title']} '
+                                  'will be developed next.',
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
                   ),
                 );
               },

@@ -11,19 +11,20 @@ import 'package:ar_flutter_plugin_plus/managers/ar_object_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_plus/widgets/ar_view.dart';
-
 import 'package:flutter/material.dart';
-
-
 import 'package:geolocator/geolocator.dart';
-
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
-
-import 'package:vector_math/vector_math_64.dart'
-    show Vector3;
+import 'package:vector_math/vector_math_64.dart' show Vector3;
 
 import '../../models/ar_measurement_result.dart';
+
+enum MeasurementStage {
+  scanning,
+  readyForStart,
+  readyForEnd,
+  measured,
+}
 
 class ArMeasurementScreen extends StatefulWidget {
   final String applicationId;
@@ -40,8 +41,7 @@ class ArMeasurementScreen extends StatefulWidget {
       _ArMeasurementScreenState();
 }
 
-class _ArMeasurementScreenState
-    extends State<ArMeasurementScreen> {
+class _ArMeasurementScreenState extends State<ArMeasurementScreen> {
   ARSessionManager? arSessionManager;
   ARObjectManager? arObjectManager;
   ARAnchorManager? arAnchorManager;
@@ -49,40 +49,46 @@ class _ArMeasurementScreenState
 
   Vector3? startPoint;
   Vector3? endPoint;
+  Vector3? livePoint;
 
   double? distanceMeters;
   double? distanceFeet;
+  double? liveDistanceMeters;
 
   double? latitude;
   double? longitude;
   double? gpsAccuracy;
 
   DateTime? measuredAt;
+  DateTime? livePointUpdatedAt;
+  DateTime? lastSuccessfulCenterHitAt;
 
   bool locationLoading = false;
   bool evidenceSaving = false;
   bool arReady = false;
+  bool _centerHitRequestInFlight = false;
 
   String? evidenceImagePath;
+  Timer? _centerScanTimer;
+
+  MeasurementStage stage = MeasurementStage.scanning;
 
   String instruction =
-      'Move the phone slowly so the device can understand the surroundings.';
+      'Move the phone slowly to scan the surroundings.';
 
   String get typeLabel {
-    if (widget.measurementType == 'HEIGHT') {
-      return 'Height';
+    switch (widget.measurementType) {
+      case 'HEIGHT':
+        return 'Height';
+      case 'WIDTH':
+        return 'Width';
+      default:
+        return 'Length';
     }
-
-    if (widget.measurementType == 'WIDTH') {
-      return 'Width';
-    }
-
-    return 'Length';
   }
 
-  /* =========================================================
-     AR INITIALIZATION
-  ========================================================= */
+  double get minimumAcceptedMeters => 0.03;
+  double get maximumAcceptedMeters => 30.0;
 
   Future<void> onARViewCreated(
     ARSessionManager sessionManager,
@@ -95,438 +101,533 @@ class _ArMeasurementScreenState
     arAnchorManager = anchorManager;
     arLocationManager = locationManager;
 
-    await sessionManager.onInitialize(
-      showFeaturePoints: true,
-      showPlanes: true,
-      showWorldOrigin: false,
-      handleTaps: true,
-    );
+    try {
+      await sessionManager.onInitialize(
+        showFeaturePoints: false,
+        showPlanes: false,
+        showWorldOrigin: false,
+        handleTaps: false,
+      );
 
-    sessionManager.onPlaneOrPointTap =
-        handleHitResults;
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      arReady = true;
-      instruction =
-          'AR ready. Tap the first point of the object.';
-    });
-  }
-
-  /* =========================================================
-     HANDLE REAL-WORLD HIT RESULTS
-  ========================================================= */
-
-  void handleHitResults(
-    List<ARHitTestResult> hits,
-  ) {
-    if (hits.isEmpty) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
+        arReady = true;
+        stage = MeasurementStage.readyForStart;
         instruction =
-            'No surface detected at that point. Move the device slowly and try again.';
+            'Move the dot to Point A, then tap +.';
       });
 
+      _startCenterScanning();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        instruction = 'Unable to initialize AR measurement: $error';
+      });
+    }
+  }
+
+  void _startCenterScanning() {
+    _centerScanTimer?.cancel();
+    _centerScanTimer = Timer.periodic(
+      const Duration(milliseconds: 140),
+      (_) {
+        if (mounted &&
+            arReady &&
+            stage != MeasurementStage.measured) {
+          _requestCenterHit();
+        }
+      },
+    );
+  }
+
+  Future<void> _requestCenterHit() async {
+    await _updateCenterHit();
+  }
+
+  Future<bool> _updateCenterHit({
+    bool showGuidance = false,
+  }) async {
+    final sessionManager = arSessionManager;
+
+    if (sessionManager == null ||
+        _centerHitRequestInFlight ||
+        !arReady ||
+        stage == MeasurementStage.measured) {
+      return _hasFreshLivePoint;
+    }
+
+    _centerHitRequestInFlight = true;
+
+    try {
+      final hits = await sessionManager.hitTestCenter();
+      final point = _extractValidPoint(hits);
+
+      if (!mounted) return false;
+
+      if (point == null) {
+        final now = DateTime.now();
+        final recentlyHadValidHit = lastSuccessfulCenterHitAt != null &&
+            now.difference(lastSuccessfulCenterHitAt!) <
+                const Duration(milliseconds: 900);
+
+        if (!recentlyHadValidHit) {
+          setState(() {
+            livePoint = null;
+            livePointUpdatedAt = null;
+
+            if (showGuidance) {
+              instruction =
+                  'Keep moving slowly until the centre dot locks onto the surface.';
+            }
+          });
+        } else if (showGuidance && mounted) {
+          setState(() {
+            instruction =
+                'Hold steady on Point B. The last valid surface position is being retained.';
+          });
+        }
+
+        return recentlyHadValidHit && livePoint != null;
+      }
+
+      double? previewMeters;
+      if (stage == MeasurementStage.readyForEnd && startPoint != null) {
+        final rawMeters = _distanceBetween(startPoint!, point);
+
+        if (rawMeters.isFinite &&
+            rawMeters >= 0 &&
+            rawMeters <= maximumAcceptedMeters) {
+          if (liveDistanceMeters == null) {
+            previewMeters = rawMeters;
+          } else {
+            // Light smoothing keeps the preview readable while still
+            // responding quickly as the phone moves.
+            const smoothing = 0.35;
+            previewMeters =
+                (liveDistanceMeters! * (1 - smoothing)) +
+                    (rawMeters * smoothing);
+          }
+        }
+      }
+
+      final now = DateTime.now();
+
+      setState(() {
+        livePoint = point;
+        livePointUpdatedAt = now;
+        lastSuccessfulCenterHitAt = now;
+
+        if (previewMeters != null) {
+          liveDistanceMeters = previewMeters;
+        }
+
+        if (stage == MeasurementStage.readyForStart) {
+          instruction = 'Surface ready. Tap + once to lock Point A.';
+        } else if (stage == MeasurementStage.readyForEnd) {
+          instruction = 'Move to Point B. Tap + once when aligned.';
+        }
+      });
+
+      return true;
+    } catch (error) {
+      if (mounted && showGuidance) {
+        setState(() {
+          instruction =
+              'AR centre measurement is not ready yet. Move the phone slowly and try again.';
+        });
+      }
+
+      return false;
+    } finally {
+      _centerHitRequestInFlight = false;
+    }
+  }
+
+  Vector3? _extractValidPoint(List<ARHitTestResult> hits) {
+    if (hits.isEmpty) return null;
+
+    for (final hit in hits) {
+      final matrix = hit.worldTransform.storage;
+      if (matrix.length < 15) continue;
+
+      final x = matrix[12];
+      final y = matrix[13];
+      final z = matrix[14];
+
+      if (!x.isFinite || !y.isFinite || !z.isFinite) continue;
+
+      return Vector3(x, y, z);
+    }
+
+    return null;
+  }
+
+  double _distanceBetween(Vector3 a, Vector3 b) {
+    return sqrt(
+      pow(b.x - a.x, 2) +
+          pow(b.y - a.y, 2) +
+          pow(b.z - a.z, 2),
+    );
+  }
+
+  bool get _hasFreshLivePoint {
+    if (livePoint == null || livePointUpdatedAt == null) return false;
+    return DateTime.now().difference(livePointUpdatedAt!) <
+        const Duration(milliseconds: 1200);
+  }
+
+  bool get _canPlacePoint {
+    return arReady &&
+        stage != MeasurementStage.measured &&
+        _hasFreshLivePoint &&
+        livePoint != null;
+  }
+
+  Future<void> _addPoint() async {
+    if (!arReady || stage == MeasurementStage.measured) return;
+
+    if (!_canPlacePoint) {
+      if (mounted) {
+        setState(() {
+          instruction =
+              'Move slowly until the reticle becomes bright, then continue.';
+        });
+      }
       return;
     }
 
-    final hit = hits.first;
-    final matrix = hit.worldTransform.storage;
-
     final point = Vector3(
-      matrix[12],
-      matrix[13],
-      matrix[14],
+      livePoint!.x,
+      livePoint!.y,
+      livePoint!.z,
     );
 
-    /*
-      First tap = start point.
-    */
+    if (stage == MeasurementStage.readyForStart) {
+      final confirmed = await _confirmPointAction(
+        title: 'Start Measurement',
+        message:
+            'Start $typeLabel measurement from Point A at the current reticle position?',
+        confirmLabel: 'YES, START',
+      );
 
-    if (startPoint == null) {
+      if (!confirmed || !mounted) return;
+
       setState(() {
-        startPoint = point;
+        startPoint = Vector3(point.x, point.y, point.z);
         endPoint = null;
-
         distanceMeters = null;
         distanceFeet = null;
-
+        liveDistanceMeters = 0;
         latitude = null;
         longitude = null;
         gpsAccuracy = null;
-
         measuredAt = null;
         evidenceImagePath = null;
-
+        stage = MeasurementStage.readyForEnd;
         instruction =
-            'Start point fixed. Tap the second point.';
+            'Point A locked. Move the reticle to Point B. Live $typeLabel will update.';
       });
-
       return;
     }
 
-    /*
-      Second tap = end point.
-      Calculate true 3D straight-line distance.
-    */
+    if (stage == MeasurementStage.readyForEnd && startPoint != null) {
+      final meters = _distanceBetween(startPoint!, point);
 
-    if (endPoint == null) {
-      final start = startPoint!;
+      if (!meters.isFinite) {
+        setState(() {
+          instruction =
+              'Invalid AR result. Hold the phone steady and try Point B again.';
+        });
+        return;
+      }
 
-      final meters = sqrt(
-        pow(point.x - start.x, 2) +
-            pow(point.y - start.y, 2) +
-            pow(point.z - start.z, 2),
+      if (meters < minimumAcceptedMeters) {
+        setState(() {
+          instruction =
+              'Point B is too close to Point A. Move the reticle to the opposite end.';
+        });
+        return;
+      }
+
+      if (meters > maximumAcceptedMeters) {
+        setState(() {
+          instruction =
+              'ARCore reported an unrealistic jump (${meters.toStringAsFixed(2)} m). Re-aim Point B and try again.';
+        });
+        return;
+      }
+
+      final confirmed = await _confirmPointAction(
+        title: 'End Measurement',
+        message:
+            'End $typeLabel measurement at Point B?\n\nCurrent value: ${_formatFeetInches(meters)} (${meters.toStringAsFixed(2)} m)',
+        confirmLabel: 'YES, END',
       );
 
+      if (!confirmed || !mounted) return;
+
+      _centerScanTimer?.cancel();
+
       setState(() {
-        endPoint = point;
-
+        endPoint = Vector3(point.x, point.y, point.z);
         distanceMeters = meters;
-        distanceFeet =
-            meters * 3.280839895;
-
+        distanceFeet = meters * 3.280839895;
+        liveDistanceMeters = meters;
         measuredAt = DateTime.now();
-
         evidenceImagePath = null;
-
+        stage = MeasurementStage.measured;
         instruction =
-            'Measurement completed. GPS is being captured. Review the result, then capture evidence.';
+            '$typeLabel measurement locked. Check the final value, then capture evidence.';
       });
 
       captureGps();
+    }
+  }
 
+  Future<bool> _confirmPointAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    if (!mounted) return false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('NO'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result == true;
+  }
+
+  void _undo() {
+    if (stage == MeasurementStage.measured) {
+      setState(() {
+        endPoint = null;
+        distanceMeters = null;
+        distanceFeet = null;
+        measuredAt = null;
+        evidenceImagePath = null;
+        latitude = null;
+        longitude = null;
+        gpsAccuracy = null;
+        stage = MeasurementStage.readyForEnd;
+        instruction =
+            'Point B removed. Move the dot to Point B, then tap +.';
+      });
+      _startCenterScanning();
       return;
     }
 
-    /*
-      Third tap starts a completely new measurement.
-    */
+    if (stage == MeasurementStage.readyForEnd) {
+      setState(() {
+        startPoint = null;
+        liveDistanceMeters = null;
+        stage = MeasurementStage.readyForStart;
+        instruction = 'Point A removed. Move the dot to Point A, then tap +.';
+      });
+    }
+  }
 
+  void _clearMeasurement() {
     setState(() {
-      startPoint = point;
+      startPoint = null;
       endPoint = null;
-
+      livePoint = null;
+      livePointUpdatedAt = null;
+      lastSuccessfulCenterHitAt = null;
+      liveDistanceMeters = null;
       distanceMeters = null;
       distanceFeet = null;
-
       latitude = null;
       longitude = null;
       gpsAccuracy = null;
-
       measuredAt = null;
       evidenceImagePath = null;
-
-      instruction =
-          'New start point fixed. Tap the second point.';
+      stage = arReady
+          ? MeasurementStage.readyForStart
+          : MeasurementStage.scanning;
+      instruction = arReady
+          ? 'Cleared. Move the dot to Point A, then tap +.'
+          : 'Move the phone slowly to scan the surroundings.';
     });
+
+    if (arReady) _startCenterScanning();
   }
 
-  /* =========================================================
-     GPS
-  ========================================================= */
-
   Future<void> captureGps() async {
-    if (locationLoading) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
+    if (locationLoading || !mounted) return;
 
     setState(() {
       locationLoading = true;
     });
 
     try {
-      final serviceEnabled =
-          await Geolocator
-              .isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
-        if (!mounted) {
-          return;
-        }
-
+        if (!mounted) return;
         setState(() {
           locationLoading = false;
-
           instruction =
               'Measurement completed, but GPS is disabled. Enable location services before capturing evidence.';
         });
-
         return;
       }
 
-      var permission =
-          await Geolocator.checkPermission();
-
-      if (permission ==
-          LocationPermission.denied) {
-        permission =
-            await Geolocator
-                .requestPermission();
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
 
-      if (permission ==
-              LocationPermission.denied ||
-          permission ==
-              LocationPermission
-                  .deniedForever) {
-        if (!mounted) {
-          return;
-        }
-
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
         setState(() {
           locationLoading = false;
-
           instruction =
               'Measurement completed, but location permission is unavailable.';
         });
-
         return;
       }
 
-      final position =
-          await Geolocator
-              .getCurrentPosition(
-        locationSettings:
-            const LocationSettings(
-          accuracy:
-              LocationAccuracy.high,
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
         ),
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
-        latitude =
-            position.latitude;
-
-        longitude =
-            position.longitude;
-
-        gpsAccuracy =
-            position.accuracy;
-
-        locationLoading =
-            false;
-
+        latitude = position.latitude;
+        longitude = position.longitude;
+        gpsAccuracy = position.accuracy;
+        locationLoading = false;
         instruction =
-            'Measurement and GPS captured. Capture the evidence image.';
+            'Measurement and GPS captured. Capture the evidence image to complete this measurement.';
       });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         locationLoading = false;
-
         instruction =
-            'Measurement completed, but GPS could not be captured.';
+            'Measurement completed, but GPS could not be captured. Try GPS again before confirming.';
       });
     }
   }
 
-  /* =========================================================
-     CONVERT SNAPSHOT IMAGEPROVIDER TO BYTES
-
-     ar_flutter_plugin_plus 1.1.3 snapshot()
-     returns ImageProvider<Object>.
-  ========================================================= */
-
   Future<Uint8List?> imageProviderToPngBytes(
     ImageProvider<Object> provider,
   ) async {
-    final completer =
-        Completer<Uint8List?>();
-
-    final imageStream = provider.resolve(
-      ImageConfiguration.empty,
-    );
-
+    final completer = Completer<Uint8List?>();
+    final imageStream = provider.resolve(ImageConfiguration.empty);
     late ImageStreamListener listener;
 
     listener = ImageStreamListener(
-      (
-        ImageInfo imageInfo,
-        bool synchronousCall,
-      ) async {
+      (ImageInfo imageInfo, bool synchronousCall) async {
         try {
-          final byteData =
-              await imageInfo.image.toByteData(
+          final byteData = await imageInfo.image.toByteData(
             format: ui.ImageByteFormat.png,
           );
 
           if (!completer.isCompleted) {
-            completer.complete(
-              byteData?.buffer.asUint8List(),
-            );
+            completer.complete(byteData?.buffer.asUint8List());
           }
-        } catch (error) {
-          if (!completer.isCompleted) {
-            completer.complete(null);
-          }
+        } catch (_) {
+          if (!completer.isCompleted) completer.complete(null);
         } finally {
-          imageStream.removeListener(
-            listener,
-          );
+          imageStream.removeListener(listener);
         }
       },
-      onError: (
-        Object error,
-        StackTrace? stackTrace,
-      ) {
-        imageStream.removeListener(
-          listener,
-        );
-
-        if (!completer.isCompleted) {
-          completer.complete(null);
-        }
+      onError: (Object error, StackTrace? stackTrace) {
+        imageStream.removeListener(listener);
+        if (!completer.isCompleted) completer.complete(null);
       },
     );
 
     imageStream.addListener(listener);
-
     return completer.future;
   }
 
-  /* =========================================================
-     CAPTURE EVIDENCE IMAGE
-  ========================================================= */
-
   Future<void> captureEvidenceImage() async {
     if (arSessionManager == null ||
+        stage != MeasurementStage.measured ||
         distanceFeet == null ||
         distanceMeters == null ||
         startPoint == null ||
         endPoint == null) {
       setState(() {
-        instruction =
-            'Complete the AR measurement before capturing evidence.';
+        instruction = 'Complete the measurement before capturing evidence.';
       });
-
       return;
     }
 
-    /*
-      Require GPS before official evidence capture.
-    */
-
-    if (latitude == null ||
-        longitude == null) {
+    if (latitude == null || longitude == null) {
       setState(() {
-        instruction =
-            'GPS is required before evidence capture. Waiting for location...';
+        instruction = 'GPS is required. Capturing location now...';
       });
 
       await captureGps();
-
-      if (latitude == null ||
-          longitude == null) {
-        return;
-      }
+      if (latitude == null || longitude == null) return;
     }
 
     setState(() {
       evidenceSaving = true;
-
-      instruction =
-          'Capturing AR evidence image...';
+      instruction = 'Capturing AR evidence image...';
     });
 
     try {
-      /*
-        Plugin 1.1.3 returns ImageProvider<Object>.
-      */
-
-      final ImageProvider<Object> provider =
-          await arSessionManager!.snapshot();
-
-      final Uint8List? screenshot =
-          await imageProviderToPngBytes(
-        provider,
-      );
+      final provider = await arSessionManager!.snapshot();
+      final screenshot = await imageProviderToPngBytes(provider);
 
       if (screenshot == null) {
-        if (!mounted) {
-          return;
-        }
-
+        if (!mounted) return;
         setState(() {
           evidenceSaving = false;
-
-          instruction =
-              'Unable to convert the AR snapshot into an evidence image.';
+          instruction = 'Unable to convert the AR snapshot.';
         });
-
         return;
       }
 
-      final decoded =
-          img.decodeImage(screenshot);
-
+      final decoded = img.decodeImage(screenshot);
       if (decoded == null) {
-        if (!mounted) {
-          return;
-        }
-
+        if (!mounted) return;
         setState(() {
           evidenceSaving = false;
-
-          instruction =
-              'Unable to process the captured AR evidence image.';
+          instruction = 'Unable to process the captured evidence image.';
         });
-
         return;
       }
 
-      final officialMeasuredAt =
-          measuredAt ?? DateTime.now();
-
+      final officialMeasuredAt = measuredAt ?? DateTime.now();
       final measurementText =
-          '${widget.measurementType}: '
-          '${distanceFeet!.toStringAsFixed(2)} ft';
-
-      final meterText =
-          '${distanceMeters!.toStringAsFixed(3)} metres';
-
-      final applicationText =
-          'Application: ${widget.applicationId}';
-
+          '${widget.measurementType}: ${_formatFeetInches(distanceMeters!)} (${distanceFeet!.toStringAsFixed(2)} ft)';
+      final meterText = '${distanceMeters!.toStringAsFixed(3)} metres';
+      final applicationText = 'Application: ${widget.applicationId}';
       final gpsText =
-          'GPS: '
-          '${latitude!.toStringAsFixed(6)}, '
-          '${longitude!.toStringAsFixed(6)}';
-
-      final accuracyText =
-          gpsAccuracy == null
-              ? 'GPS Accuracy: -'
-              : 'GPS Accuracy: '
-                  '+/-${gpsAccuracy!.toStringAsFixed(1)} m';
-
-      final timeText =
-          'Measured At: '
-          '${officialMeasuredAt.toLocal()}';
-
-      const methodText =
-          'Method: AR_3D_HIT_TEST';
-
-      /*
-        Burn the key evidence information directly
-        into the stored evidence image.
-      */
+          'GPS: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}';
+      final accuracyText = gpsAccuracy == null
+          ? 'GPS Accuracy: -'
+          : 'GPS Accuracy: +/-${gpsAccuracy!.toStringAsFixed(1)} m';
+      final timeText = 'Measured At: ${officialMeasuredAt.toLocal()}';
+      const methodText = 'Method: ARCORE_CENTER_RAYCAST';
 
       img.drawString(
         decoded,
@@ -535,7 +636,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 20,
       );
-
       img.drawString(
         decoded,
         meterText,
@@ -543,7 +643,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 55,
       );
-
       img.drawString(
         decoded,
         applicationText,
@@ -551,7 +650,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 80,
       );
-
       img.drawString(
         decoded,
         gpsText,
@@ -559,7 +657,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 105,
       );
-
       img.drawString(
         decoded,
         accuracyText,
@@ -567,7 +664,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 130,
       );
-
       img.drawString(
         decoded,
         timeText,
@@ -575,7 +671,6 @@ class _ArMeasurementScreenState
         x: 20,
         y: 155,
       );
-
       img.drawString(
         decoded,
         methodText,
@@ -584,738 +679,554 @@ class _ArMeasurementScreenState
         y: 180,
       );
 
-      final directory =
-          await getApplicationDocumentsDirectory();
-
-      final safeApplicationId =
-          widget.applicationId.replaceAll(
+      final directory = await getApplicationDocumentsDirectory();
+      final safeApplicationId = widget.applicationId.replaceAll(
         RegExp(r'[^A-Za-z0-9_-]'),
         '_',
       );
-
       final filename =
-          'measurement_'
-          '${safeApplicationId}_'
-          '${widget.measurementType}_'
-          '${officialMeasuredAt.millisecondsSinceEpoch}.jpg';
-
-      final file = File(
-        '${directory.path}/$filename',
-      );
+          'measurement_${safeApplicationId}_${widget.measurementType}_${officialMeasuredAt.millisecondsSinceEpoch}.jpg';
+      final file = File('${directory.path}/$filename');
 
       await file.writeAsBytes(
-        img.encodeJpg(
-          decoded,
-          quality: 95,
-        ),
+        img.encodeJpg(decoded, quality: 95),
         flush: true,
       );
 
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
-        evidenceImagePath =
-            file.path;
-
+        evidenceImagePath = file.path;
         evidenceSaving = false;
-
         instruction =
-            'Evidence image captured successfully. Review it below, then use the measurement.';
+            'Evidence captured. Tap Use Measurement to send this value to Idol Verification.';
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         evidenceSaving = false;
-
-        instruction =
-            'Unable to capture evidence image: $error';
+        instruction = 'Unable to capture evidence image: $error';
       });
     }
   }
 
-  /* =========================================================
-     RESET
-  ========================================================= */
-
-  void resetMeasurement() {
-    setState(() {
-      startPoint = null;
-      endPoint = null;
-
-      distanceMeters = null;
-      distanceFeet = null;
-
-      latitude = null;
-      longitude = null;
-      gpsAccuracy = null;
-
-      measuredAt = null;
-      evidenceImagePath = null;
-
-      instruction =
-          'Measurement reset. Tap the first point.';
-    });
-  }
-
-  /* =========================================================
-     CONFIRM RESULT
-  ========================================================= */
-
   void confirmMeasurement() {
-    if (startPoint == null ||
+    if (stage != MeasurementStage.measured ||
+        startPoint == null ||
         endPoint == null ||
         distanceMeters == null ||
         distanceFeet == null) {
+      setState(() {
+        instruction = 'A valid AR measurement is required.';
+      });
       return;
     }
 
     if (evidenceImagePath == null) {
       setState(() {
-        instruction =
-            'Please capture the measurement evidence image before confirming.';
+        instruction = 'Capture the evidence image before confirming.';
       });
-
       return;
     }
 
-    if (latitude == null ||
-        longitude == null) {
+    if (latitude == null || longitude == null) {
       setState(() {
-        instruction =
-            'GPS location is required before confirming this official measurement.';
+        instruction = 'GPS location is required before confirming.';
       });
-
       return;
     }
 
-    final result =
-        ArMeasurementResult(
-      valueFeet:
-          distanceFeet!,
-
-      valueMeters:
-          distanceMeters!,
-
-      startX:
-          startPoint!.x,
-
-      startY:
-          startPoint!.y,
-
-      startZ:
-          startPoint!.z,
-
-      endX:
-          endPoint!.x,
-
-      endY:
-          endPoint!.y,
-
-      endZ:
-          endPoint!.z,
-
-      latitude:
-          latitude,
-
-      longitude:
-          longitude,
-
-      gpsAccuracy:
-          gpsAccuracy,
-
-      measuredAt:
-          measuredAt ?? DateTime.now(),
-
-      measurementType:
-          widget.measurementType,
-
-      measurementMethod:
-          'AR_3D_HIT_TEST',
-
-      evidenceImagePath:
-          evidenceImagePath,
+    final result = ArMeasurementResult(
+      valueFeet: distanceFeet!,
+      valueMeters: distanceMeters!,
+      startX: startPoint!.x,
+      startY: startPoint!.y,
+      startZ: startPoint!.z,
+      endX: endPoint!.x,
+      endY: endPoint!.y,
+      endZ: endPoint!.z,
+      latitude: latitude,
+      longitude: longitude,
+      gpsAccuracy: gpsAccuracy,
+      measuredAt: measuredAt ?? DateTime.now(),
+      measurementType: widget.measurementType,
+      measurementMethod: 'ARCORE_CENTER_RAYCAST',
+      evidenceImagePath: evidenceImagePath,
     );
 
-    Navigator.pop(
-      context,
-      result,
-    );
+    Navigator.pop(context, result);
   }
 
-  /* =========================================================
-     DISPOSE
-  ========================================================= */
+  String _formatFeetInches(double meters) {
+    var totalInches = (meters * 39.37007874).round();
+    var feet = totalInches ~/ 12;
+    var inches = totalInches % 12;
+
+    if (inches == 12) {
+      feet += 1;
+      inches = 0;
+    }
+
+    return '$feet\' $inches\"';
+  }
+
+  String get _stageText {
+    switch (stage) {
+      case MeasurementStage.scanning:
+        return 'SCANNING';
+      case MeasurementStage.readyForStart:
+        return 'POINT A';
+      case MeasurementStage.readyForEnd:
+        return 'POINT B';
+      case MeasurementStage.measured:
+        return 'LOCKED';
+    }
+  }
+
+  Color get _stageColor {
+    switch (stage) {
+      case MeasurementStage.scanning:
+        return Colors.orange;
+      case MeasurementStage.readyForStart:
+        return Colors.white;
+      case MeasurementStage.readyForEnd:
+        return Colors.yellowAccent;
+      case MeasurementStage.measured:
+        return Colors.greenAccent;
+    }
+  }
+
+  double? get _displayMeters {
+    if (stage == MeasurementStage.measured) return distanceMeters;
+    if (stage == MeasurementStage.readyForEnd) return liveDistanceMeters;
+    return null;
+  }
 
   @override
   void dispose() {
+    _centerScanTimer?.cancel();
     arSessionManager?.dispose();
-
     super.dispose();
   }
 
-  /* =========================================================
-     UI
-  ========================================================= */
-
   @override
   Widget build(BuildContext context) {
+    final displayMeters = _displayMeters;
+
     return Scaffold(
-      backgroundColor:
-          Colors.black,
-
-      body: SafeArea(
-        child: Stack(
-          children: [
-            /* =================================================
-               AR CAMERA VIEW
-            ================================================= */
-
-            Positioned.fill(
-              child: ARView(
-                onARViewCreated:
-                    onARViewCreated,
-
-                planeDetectionConfig:
-                    PlaneDetectionConfig
-                        .horizontalAndVertical,
-              ),
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: ARView(
+              onARViewCreated: onARViewCreated,
+              planeDetectionConfig:
+                  PlaneDetectionConfig.horizontalAndVertical,
             ),
+          ),
 
-            /* =================================================
-               CENTRAL POINTER
-            ================================================= */
-
-            const IgnorePointer(
-              child: Center(
-                child: _ArCenterPointer(),
-              ),
-            ),
-
-            /* =================================================
-               TOP BAR
-            ================================================= */
-
-            Positioned(
-              left: 12,
-              right: 12,
-              top: 12,
-
-              child: Container(
-                padding:
-                    const EdgeInsets
-                        .all(14),
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.black54,
-
-                  borderRadius:
-                      BorderRadius
-                          .circular(14),
-                ),
-
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () {
-                        Navigator.pop(
-                          context,
-                        );
-                      },
-
-                      icon:
-                          const Icon(
-                        Icons.arrow_back,
-                        color:
-                            Colors.white,
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              child: Row(
+                children: [
+                  _RoundGlassButton(
+                    icon: Icons.close,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Idol $typeLabel',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                  const Spacer(),
+                  _RoundGlassButton(
+                    icon: Icons.delete_outline,
+                    onPressed: _clearMeasurement,
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
-
-                        children: [
-                          const Text(
-                            'DIGITAL AR MEASUREMENT',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.white70,
-                              fontSize: 11,
-                              fontWeight:
-                                  FontWeight.bold,
-                            ),
-                          ),
-
-                          Text(
-                            'Measure Idol $typeLabel',
-                            style:
-                                const TextStyle(
-                              color:
-                                  Colors.white,
-                              fontSize: 18,
-                              fontWeight:
-                                  FontWeight.bold,
-                            ),
-                          ),
-
-                          Text(
-                            widget.applicationId,
-                            style:
-                                const TextStyle(
-                              color:
-                                  Colors.white70,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+          IgnorePointer(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (displayMeters != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.62),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '${_formatFeetInches(displayMeters)}  •  ${displayMeters.toStringAsFixed(2)} m',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 18),
                   ],
-                ),
+                  _MeasureReticle(
+                    active: _hasFreshLivePoint,
+                    locked: stage == MeasurementStage.measured,
+                  ),
+                ],
               ),
             ),
+          ),
 
-            /* =================================================
-               INSTRUCTION / RESULT PANEL
-            ================================================= */
-
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom:
-                  evidenceImagePath == null
-                      ? 245
-                      : 355,
-
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: stage == MeasurementStage.measured ? 220 : 132,
+            child: IgnorePointer(
               child: Container(
-                padding:
-                    const EdgeInsets
-                        .all(14),
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.black
-                          .withValues(
-                            alpha:
-                                0.72,
-                          ),
-
-                  borderRadius:
-                      BorderRadius
-                          .circular(14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
                 ),
-
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.62),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      instruction,
-                      textAlign:
-                          TextAlign.center,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white,
-                        fontWeight:
-                            FontWeight.w600,
+                      _stageText,
+                      style: TextStyle(
+                        color: _stageColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
                       ),
                     ),
-
-                    if (!arReady) ...[
-                      const SizedBox(
-                          height: 8),
-
-                      const LinearProgressIndicator(),
-                    ],
-
-                    if (distanceFeet !=
-                        null) ...[
-                      const SizedBox(
-                          height: 12),
-
-                      Text(
-                        '${distanceFeet!.toStringAsFixed(2)} ft',
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.greenAccent,
-                          fontSize: 34,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      instruction,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        height: 1.25,
                       ),
-
-                      Text(
-                        '${distanceMeters!.toStringAsFixed(3)} metres',
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.white70,
-                        ),
-                      ),
-
-                      if (measuredAt != null)
-                        Text(
-                          'Measured: ${measuredAt!.toLocal()}',
-                          style:
-                              const TextStyle(
-                            color:
-                                Colors.white60,
-                            fontSize: 11,
-                          ),
-                        ),
-                    ],
+                    ),
                   ],
                 ),
               ),
             ),
+          ),
 
-            /* =================================================
-               BOTTOM CONTROLS
-            ================================================= */
-
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 20,
-
-              child: Container(
-                padding:
-                    const EdgeInsets
-                        .all(14),
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.black
-                          .withValues(
-                            alpha:
-                                0.80,
-                          ),
-
-                  borderRadius:
-                      BorderRadius
-                          .circular(16),
-                ),
-
-                child: Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
-
-                  children: [
-                    /* GPS STATUS */
-
-                    if (locationLoading) ...[
-                      const Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment
-                                .center,
-
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-
-                            child:
-                                CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color:
-                                  Colors.white,
-                            ),
-                          ),
-
-                          SizedBox(
-                              width: 8),
-
-                          Text(
-                            'Capturing GPS...',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(
-                          height: 10),
-                    ],
-
-                    if (latitude != null &&
-                        longitude != null) ...[
-                      Text(
-                        'GPS '
-                        '${latitude!.toStringAsFixed(6)}, '
-                        '${longitude!.toStringAsFixed(6)}'
-                        '${gpsAccuracy == null ? '' : ' • ±${gpsAccuracy!.toStringAsFixed(1)} m'}',
-                        textAlign:
-                            TextAlign.center,
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height: 10),
-                    ],
-
-                    /* EVIDENCE BUTTON */
-
-                    if (distanceFeet !=
-                        null) ...[
+          if (stage != MeasurementStage.measured)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       SizedBox(
-                        width:
-                            double.infinity,
-
-                        child:
-                            FilledButton.icon(
-                          onPressed:
-                              evidenceSaving
-                                  ? null
-                                  : captureEvidenceImage,
-
-                          icon:
-                              const Icon(
-                            Icons.camera_alt,
+                        width: 72,
+                        child: TextButton.icon(
+                          onPressed: stage == MeasurementStage.readyForEnd
+                              ? _undo
+                              : null,
+                          icon: const Icon(Icons.undo),
+                          label: const Text('Undo'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
                           ),
-
-                          label:
-                              Text(
-                            evidenceSaving
-                                ? 'Saving Evidence...'
-                                : evidenceImagePath ==
-                                        null
-                                    ? 'Capture Evidence Image'
-                                    : 'Retake Evidence Image',
-                          ),
-
-                          style:
-                              FilledButton
-                                  .styleFrom(
+                        ),
+                      ),
+                      const SizedBox(width: 22),
+                      Semantics(
+                        label: stage == MeasurementStage.readyForStart
+                            ? 'Start measurement at Point A'
+                            : 'End measurement at Point B',
+                        button: true,
+                        child: SizedBox(
+                          width: 92,
+                          height: 78,
+                          child: FloatingActionButton.extended(
+                            heroTag: 'ar_measure_add_point',
+                            onPressed: _canPlacePoint ? _addPoint : null,
                             backgroundColor:
-                                const Color(
-                                    0xFF17365D),
+                                _canPlacePoint ? Colors.white : Colors.white38,
+                            foregroundColor:
+                                _canPlacePoint ? Colors.black : Colors.black45,
+                            elevation: _canPlacePoint ? 4 : 0,
+                            icon: Icon(
+                              stage == MeasurementStage.readyForStart
+                                  ? Icons.play_arrow
+                                  : Icons.stop,
+                            ),
+                            label: Text(
+                              stage == MeasurementStage.readyForStart
+                                  ? 'START'
+                                  : 'END',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-
-                      const SizedBox(
-                          height: 10),
+                      const SizedBox(width: 22),
+                      const SizedBox(width: 72),
                     ],
+                  ),
+                ),
+              ),
+            ),
 
-                    /* EVIDENCE PREVIEW */
-
-                    if (evidenceImagePath !=
-                        null) ...[
-                      ClipRRect(
-                        borderRadius:
-                            BorderRadius
-                                .circular(10),
-
-                        child: Image.file(
-                          File(
-                            evidenceImagePath!,
-                          ),
-
-                          width:
-                              double.infinity,
-
-                          height: 105,
-
-                          fit:
-                              BoxFit.cover,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height: 8),
-
-                      const Row(
+          if (stage == MeasurementStage.measured)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.82),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
                         children: [
-                          Icon(
-                            Icons.check_circle,
-                            color:
-                                Colors.greenAccent,
-                            size: 18,
-                          ),
-
-                          SizedBox(
-                              width: 7),
-
                           Expanded(
-                            child: Text(
-                              'Evidence image captured with measurement, GPS and timestamp.',
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.white,
-                                fontSize: 11,
+                            child: TextButton.icon(
+                              onPressed: _undo,
+                              icon: const Icon(Icons.undo),
+                              label: const Text('Undo B'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed:
+                                  evidenceSaving ? null : captureEvidenceImage,
+                              icon: const Icon(Icons.camera_alt_outlined),
+                              label: Text(
+                                evidenceSaving
+                                    ? 'Saving...'
+                                    : evidenceImagePath == null
+                                        ? 'Evidence'
+                                        : 'Retake',
                               ),
                             ),
                           ),
                         ],
                       ),
-
-                      const SizedBox(
-                          height: 10),
-                    ],
-
-                    /* RESET + CONFIRM */
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child:
-                              OutlinedButton.icon(
-                            onPressed:
-                                resetMeasurement,
-
-                            icon:
-                                const Icon(
-                              Icons.refresh,
-                            ),
-
-                            label:
-                                const Text(
-                              'Reset',
-                            ),
-
-                            style:
-                                OutlinedButton
-                                    .styleFrom(
-                              foregroundColor:
-                                  Colors.white,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(
-                            width: 12),
-
-                        Expanded(
-                          child:
-                              FilledButton.icon(
-                            onPressed:
-                                distanceFeet ==
-                                            null ||
-                                        evidenceImagePath ==
-                                            null ||
-                                        latitude ==
-                                            null ||
-                                        longitude ==
-                                            null
-                                    ? null
-                                    : confirmMeasurement,
-
-                            icon:
-                                const Icon(
-                              Icons.check,
-                            ),
-
-                            label:
-                                const Text(
-                              'Use Measurement',
-                            ),
-
-                            style:
-                                FilledButton
-                                    .styleFrom(
-                              backgroundColor:
-                                  Colors.green,
-                            ),
+                      if (locationLoading) ...[
+                        const SizedBox(height: 6),
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Capturing GPS...',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
                           ),
                         ),
                       ],
-                    ),
-                  ],
+                      if (evidenceImagePath != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: Colors.greenAccent,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                gpsAccuracy == null
+                                    ? 'Evidence captured.'
+                                    : 'Evidence + GPS captured (±${gpsAccuracy!.toStringAsFixed(1)} m).',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: evidenceImagePath != null &&
+                                  latitude != null &&
+                                  longitude != null
+                              ? confirmMeasurement
+                              : null,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Use Measurement'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MeasureReticle extends StatelessWidget {
+  final bool active;
+  final bool locked;
+
+  const _MeasureReticle({
+    required this.active,
+    required this.locked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = locked
+        ? Colors.greenAccent
+        : active
+            ? Colors.white
+            : Colors.white70;
+
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: CustomPaint(
+        painter: _MeasureReticlePainter(
+          color: color,
+          active: active,
         ),
       ),
     );
   }
 }
 
-/* =========================================================
-   REUSABLE AR CENTER POINTER
-========================================================= */
+class _MeasureReticlePainter extends CustomPainter {
+  final Color color;
+  final bool active;
 
-class _ArCenterPointer extends StatelessWidget {
-  const _ArCenterPointer();
+  const _MeasureReticlePainter({
+    required this.color,
+    required this.active,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black54
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = active ? 2.8 : 2.4
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final radius = active ? 16.0 : 15.0;
+    const innerGap = 21.0;
+    const outerExtent = 33.0;
+
+    // Circle shadow + circle.
+    canvas.drawCircle(center, radius, shadowPaint);
+    canvas.drawCircle(center, radius, paint);
+
+    // Four highly visible alignment ticks.
+    final tickSegments = <List<Offset>>[
+      [
+        Offset(center.dx, center.dy - innerGap),
+        Offset(center.dx, center.dy - outerExtent),
+      ],
+      [
+        Offset(center.dx, center.dy + innerGap),
+        Offset(center.dx, center.dy + outerExtent),
+      ],
+      [
+        Offset(center.dx - innerGap, center.dy),
+        Offset(center.dx - outerExtent, center.dy),
+      ],
+      [
+        Offset(center.dx + innerGap, center.dy),
+        Offset(center.dx + outerExtent, center.dy),
+      ],
+    ];
+
+    for (final segment in tickSegments) {
+      canvas.drawLine(segment[0], segment[1], shadowPaint);
+      canvas.drawLine(segment[0], segment[1], paint);
+    }
+
+    // Centre aiming point.
+    canvas.drawCircle(center, active ? 4.0 : 3.0, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MeasureReticlePainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.active != active;
+  }
+}
+
+class _RoundGlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _RoundGlassButton({
+    required this.icon,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      height: 72,
-
-      child: Stack(
-        alignment:
-            Alignment.center,
-
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-
-            decoration:
-                BoxDecoration(
-              shape:
-                  BoxShape.circle,
-
-              border:
-                  Border.all(
-                color:
-                    Colors.yellow,
-                width: 2,
-              ),
-            ),
-          ),
-
-          Container(
-            width: 3,
-            height: 72,
-            color:
-                Colors.yellow,
-          ),
-
-          Container(
-            width: 72,
-            height: 3,
-            color:
-                Colors.yellow,
-          ),
-
-          Container(
-            width: 10,
-            height: 10,
-
-            decoration:
-                const BoxDecoration(
-              shape:
-                  BoxShape.circle,
-
-              color:
-                  Colors.yellow,
-            ),
-          ),
-        ],
+    return Material(
+      color: Colors.black54,
+      shape: const CircleBorder(),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, color: Colors.white),
       ),
     );
   }

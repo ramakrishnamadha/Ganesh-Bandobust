@@ -1064,30 +1064,35 @@ export default function Dashboard() {
       name: "Pre-Installation",
       status: "ACTIVE",
       active: true,
+      route: "/pre-installation",
     },
     {
       number: 2,
       name: "Installation",
-      status: "Pending Configuration",
-      active: false,
+      status: "AVAILABLE",
+      active: true,
+      route: "/installation",
     },
     {
       number: 3,
       name: "During Festivity",
-      status: "Pending Configuration",
-      active: false,
+      status: "ACTIVE",
+      active: true,
+      route: "/festivity",
     },
     {
       number: 4,
       name: "Immersion",
       status: "Pending Configuration",
       active: false,
+      route: "",
     },
     {
       number: 5,
       name: "Post-Immersion",
       status: "Pending Configuration",
       active: false,
+      route: "",
     },
   ];
 
@@ -2027,12 +2032,14 @@ export default function Dashboard() {
             (stage) => (
               <button
                 key={stage.number}
+                type="button"
                 onClick={() => {
                   if (
-                    stage.number === 1
+                    stage.active &&
+                    stage.route
                   ) {
                     router.push(
-                      "/pre-installation",
+                      stage.route,
                     );
                   }
                 }}

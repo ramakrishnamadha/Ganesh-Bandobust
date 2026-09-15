@@ -1,6 +1,25 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type GpidRecord = {
+  gpid: string;
+  range: string | null;
+  zone: string | null;
+  division: string | null;
+  policeStation: string | null;
+  status: string | null;
+};
+
+type GpidMasterResponse = {
+  success: boolean;
+  fetchedAt?: string;
+  total?: number;
+  rangeAvailable?: boolean;
+  records?: GpidRecord[];
+  message?: string;
+};
 
 const checkingModules = [
   {
@@ -56,17 +75,84 @@ const checkingModules = [
 export default function FestivityPage() {
   const router = useRouter();
 
-  /*
-   * STAGE 3 — FESTIVITY PERIOD
-   *
-   * Web is primarily a monitoring and supervisory interface.
-   *
-   * Each Mobile checking visit must eventually remain a separate,
-   * auditable record. Repeated checks must not overwrite previous checks.
-   *
-   * Live Stage-3 API integration is intentionally not connected here
-   * until the server contract is finalized.
-   */
+  const [records, setRecords] = useState<GpidRecord[]>([]);
+  const [loadingGpids, setLoadingGpids] = useState(true);
+  const [gpidError, setGpidError] = useState("");
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadGpids() {
+      try {
+        setGpidError("");
+
+        const response = await fetch("/api/festivity/gpid-master", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const data = (await response.json()) as GpidMasterResponse;
+
+        if (!response.ok || !data.success || !Array.isArray(data.records)) {
+          throw new Error(
+            data.message || "Unable to load live GPID master data.",
+          );
+        }
+
+        if (!active) return;
+
+        setRecords(data.records);
+        setFetchedAt(data.fetchedAt ?? null);
+      } catch (error) {
+        if (!active) return;
+
+        console.error("Festivity dashboard GPID error:", error);
+
+        setGpidError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load live GPID master data.",
+        );
+      } finally {
+        if (active) {
+          setLoadingGpids(false);
+        }
+      }
+    }
+
+    void loadGpids();
+
+    const refreshTimer = window.setInterval(() => {
+      void loadGpids();
+    }, 60000);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
+
+  const masterSummary = useMemo(() => {
+    const zones = new Set<string>();
+    const divisions = new Set<string>();
+    const policeStations = new Set<string>();
+
+    for (const record of records) {
+      if (record.zone) zones.add(record.zone);
+      if (record.division) divisions.add(record.division);
+      if (record.policeStation) policeStations.add(record.policeStation);
+    }
+
+    return {
+      totalGpids: records.length,
+      zones: zones.size,
+      divisions: divisions.size,
+      policeStations: policeStations.size,
+    };
+  }, [records]);
+
+  const apiLive = !loadingGpids && !gpidError && records.length > 0;
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -118,10 +204,28 @@ export default function FestivityPage() {
               </p>
             </div>
 
-            <span className="rounded-full bg-amber-100 px-4 py-2 text-xs font-bold text-amber-800">
-              API INTEGRATION PENDING
+            <span
+              className={`rounded-full px-4 py-2 text-xs font-bold ${
+                loadingGpids
+                  ? "bg-amber-100 text-amber-800"
+                  : apiLive
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-red-100 text-red-800"
+              }`}
+            >
+              {loadingGpids
+                ? "CONNECTING LIVE GPID API"
+                : apiLive
+                  ? "GPID API LIVE"
+                  : "GPID API ERROR"}
             </span>
           </div>
+
+          {gpidError && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {gpidError}
+            </div>
+          )}
         </section>
 
         {/* CHECKING PRINCIPLE */}
@@ -140,7 +244,7 @@ export default function FestivityPage() {
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 Every visit to a GPID during the Festivity Period must remain
                 as an independent checking record. Subsequent visits or
-                supervisory checks must not overwrite an earlier officer's
+                supervisory checks must not overwrite an earlier officer&apos;s
                 observations, evidence, action or remarks.
               </p>
             </div>
@@ -158,35 +262,107 @@ export default function FestivityPage() {
         {/* SUMMARY */}
 
         <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Total GPIDs" />
-          <SummaryCard label="Checked Today" />
-          <SummaryCard label="Pending / Unchecked" />
-          <SummaryCard label="Adverse Findings" />
-          <SummaryCard label="Follow-up Pending" />
-          <SummaryCard label="SB Disagreements" />
-          <SummaryCard label="Senior Officer Remarks" />
-          <SummaryCard label="Repeated Checks" />
+          <SummaryCard
+            label="Total GPIDs"
+            value={
+              loadingGpids
+                ? "..."
+                : gpidError
+                  ? "—"
+                  : masterSummary.totalGpids.toLocaleString()
+            }
+            note="Live GPID master"
+          />
+
+          <SummaryCard
+            label="Checked Today"
+            value="—"
+            note="Stage-3 saved visits pending"
+          />
+
+          <SummaryCard
+            label="Pending / Unchecked"
+            value="—"
+            note="Calculated after visit persistence"
+          />
+
+          <SummaryCard
+            label="Adverse Findings"
+            value="—"
+            note="Calculated from saved checking records"
+          />
+
+          <SummaryCard
+            label="Follow-up Pending"
+            value="—"
+            note="Calculated from saved checking records"
+          />
+
+          <SummaryCard
+            label="SB Disagreements"
+            value="—"
+            note="Calculated from SB audit records"
+          />
+
+          <SummaryCard
+            label="Senior Officer Remarks"
+            value="—"
+            note="Calculated from supervisory records"
+          />
+
+          <SummaryCard
+            label="Repeated Checks"
+            value="—"
+            note="Calculated from immutable visit history"
+          />
         </section>
 
-        {/* FILTERS PLACEHOLDER */}
+        {/* LIVE MASTER MONITORING */}
 
-        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <section className="mb-6 rounded-xl border border-emerald-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                Live GPID Master
+              </p>
+
+              <h2 className="mt-1 text-lg font-bold text-slate-800">
                 Festivity Monitoring
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Hierarchy, date/day, GPID and status filters will be connected
-                to the finalized Stage-3 data contract and role permissions.
+                Current 2026 GPID master is connected. Stage-3 operational
+                counters will populate after checking visits are persisted.
               </p>
             </div>
 
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-              DATA UNAVAILABLE
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                apiLive
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {apiLive ? "LIVE DATA" : "WAITING FOR DATA"}
             </span>
           </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MasterStat label="GPIDs" value={masterSummary.totalGpids} />
+            <MasterStat label="Zones" value={masterSummary.zones} />
+            <MasterStat label="Divisions" value={masterSummary.divisions} />
+            <MasterStat
+              label="Police Stations"
+              value={masterSummary.policeStations}
+            />
+          </div>
+
+          {fetchedAt && (
+            <p className="mt-4 text-xs text-slate-400">
+              Last live master refresh:{" "}
+              {new Date(fetchedAt).toLocaleString()}
+            </p>
+          )}
         </section>
 
         {/* MODULES */}
@@ -237,11 +413,13 @@ export default function FestivityPage() {
             <SupervisionCard
               title="SB Cross Verification"
               description="Original checking information remains unchanged. SB assessment will separately record AGREED or DISAGREED, with mandatory remarks when disagreed."
+              status="Awaiting saved Stage-3 records"
             />
 
             <SupervisionCard
               title="Senior Officer Remarks"
               description="Senior officer remarks may be recorded through the application or represented by captured Physical Point Book evidence where applicable."
+              status="Awaiting saved Stage-3 records"
             />
           </div>
         </section>
@@ -266,12 +444,50 @@ export default function FestivityPage() {
   );
 }
 
-function SummaryCard({ label }: { label: string }) {
+function SummaryCard({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <p className="text-sm font-medium text-slate-500">
+        {label}
+      </p>
 
-      <p className="mt-2 text-3xl font-bold text-[#17365D]">—</p>
+      <p className="mt-2 text-3xl font-bold text-[#17365D]">
+        {value}
+      </p>
+
+      {note && (
+        <p className="mt-2 text-xs leading-5 text-slate-400">
+          {note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function MasterStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+        {label}
+      </p>
+
+      <p className="mt-1 text-2xl font-bold text-slate-800">
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }
@@ -279,20 +495,24 @@ function SummaryCard({ label }: { label: string }) {
 function SupervisionCard({
   title,
   description,
+  status,
 }: {
   title: string;
   description: string;
+  status: string;
 }) {
   return (
     <div className="rounded-xl border border-purple-200 bg-white p-5">
-      <h3 className="font-bold text-slate-800">{title}</h3>
+      <h3 className="font-bold text-slate-800">
+        {title}
+      </h3>
 
       <p className="mt-2 text-sm leading-6 text-slate-600">
         {description}
       </p>
 
       <p className="mt-4 text-sm font-semibold text-slate-400">
-        Data unavailable
+        {status}
       </p>
     </div>
   );

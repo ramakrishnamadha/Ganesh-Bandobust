@@ -1,0 +1,233 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import 'auth_service.dart';
+
+class InstallationCheckApiService {
+  static const String _baseUrl =
+      'http://13.200.137.199/api/installation-checks';
+
+  static String _requireSessionCookie() {
+    final String? cookie = AuthService.sessionCookie;
+
+    if (cookie == null || cookie.trim().isEmpty) {
+      throw Exception(
+        'Authenticated session is not available. Please login again.',
+      );
+    }
+
+    return cookie;
+  }
+
+  static Map<String, String> _authenticatedHeaders({
+    bool includeJsonContentType = false,
+  }) {
+    final String cookie = _requireSessionCookie();
+
+    return <String, String>{
+      'Accept': 'application/json',
+      'Cookie': cookie,
+      if (includeJsonContentType)
+        'Content-Type': 'application/json',
+    };
+  }
+
+  static Future<Map<String, dynamic>> submitInstallationCheck(
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_baseUrl),
+            headers: _authenticatedHeaders(
+              includeJsonContentType: true,
+            ),
+            body: jsonEncode(data),
+          )
+          .timeout(
+            const Duration(seconds: 90),
+          );
+
+      if (response.statusCode == 401) {
+        throw Exception(
+          'Your login session is invalid or expired. Please login again.',
+        );
+      }
+
+      if (response.statusCode == 403) {
+        throw Exception(
+          'You do not have permission to submit an Installation check for this GPID.',
+        );
+      }
+
+      if (response.statusCode == 404) {
+        throw Exception(
+          'GPID was not found in the current GPID master.',
+        );
+      }
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        String message =
+            'Failed to submit Installation check. '
+            'Status code: ${response.statusCode}';
+
+        if (response.body.isNotEmpty) {
+          try {
+            final dynamic decodedError = jsonDecode(
+              response.body,
+            );
+
+            if (decodedError is Map<String, dynamic>) {
+              final dynamic apiError = decodedError['error'];
+
+              if (apiError != null &&
+                  apiError.toString().trim().isNotEmpty) {
+                message = apiError.toString();
+              }
+            }
+          } catch (_) {
+            // Keep default status-code message.
+          }
+        }
+
+        throw Exception(message);
+      }
+
+      final dynamic decoded = jsonDecode(
+        response.body,
+      );
+
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(
+          decoded,
+        );
+      }
+
+      throw Exception(
+        'Unexpected Installation API response format.',
+      );
+    } on TimeoutException {
+      throw Exception(
+        'Installation check submission timed out. Please check the network and try again.',
+      );
+    } on FormatException {
+      throw Exception(
+        'Invalid response received from Installation API.',
+      );
+    } on http.ClientException catch (e) {
+      throw Exception(
+        'Network error while submitting Installation check: $e',
+      );
+    } catch (e) {
+      throw Exception(
+        'Unable to submit Installation check: $e',
+      );
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchInstallationChecks({
+    String? gpid,
+    int limit = 200,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'limit': limit.clamp(1, 500).toString(),
+      };
+
+      final cleanGpid = gpid?.trim() ?? '';
+
+      if (cleanGpid.isNotEmpty) {
+        queryParameters['gpid'] = cleanGpid;
+      }
+
+      final uri = Uri.parse(_baseUrl).replace(
+        queryParameters: queryParameters,
+      );
+
+      final response = await http
+          .get(
+            uri,
+            headers: _authenticatedHeaders(),
+          )
+          .timeout(
+            const Duration(seconds: 90),
+          );
+
+      if (response.statusCode == 401) {
+        throw Exception(
+          'Your login session is invalid or expired. Please login again.',
+        );
+      }
+
+      if (response.statusCode == 403) {
+        throw Exception(
+          'You do not have permission to view Installation check records.',
+        );
+      }
+
+      if (response.statusCode != 200) {
+        String message =
+            'Failed to load Installation check records. '
+            'Status code: ${response.statusCode}';
+
+        if (response.body.isNotEmpty) {
+          try {
+            final dynamic decodedError = jsonDecode(
+              response.body,
+            );
+
+            if (decodedError is Map<String, dynamic>) {
+              final dynamic apiError = decodedError['error'];
+
+              if (apiError != null &&
+                  apiError.toString().trim().isNotEmpty) {
+                message = apiError.toString();
+              }
+            }
+          } catch (_) {
+            // Keep default status-code message.
+          }
+        }
+
+        throw Exception(message);
+      }
+
+      final dynamic decoded = jsonDecode(
+        response.body,
+      );
+
+      if (decoded is! List) {
+        throw Exception(
+          'Unexpected Installation API response format.',
+        );
+      }
+
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    } on TimeoutException {
+      throw Exception(
+        'Installation API request timed out.',
+      );
+    } on FormatException {
+      throw Exception(
+        'Invalid Installation check data received.',
+      );
+    } on http.ClientException catch (e) {
+      throw Exception(
+        'Network error while loading Installation check records: $e',
+      );
+    } catch (e) {
+      throw Exception(
+        'Unable to load Installation check records: $e',
+      );
+    }
+  }
+}

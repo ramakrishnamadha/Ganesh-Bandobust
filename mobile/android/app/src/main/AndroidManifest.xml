@@ -1,21 +1,83 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ===================================================== -->
+    <!-- CAMERA / AR                                           -->
+    <!-- ===================================================== -->
+
     <!-- Camera permission for AR measurement -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- GPS permissions for geo-tagging -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ===================================================== -->
+    <!-- LOCATION / GPS                                        -->
+    <!-- ===================================================== -->
+
+    <!-- Approximate location -->
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Precise GPS location -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!--
+         Required when authorised operational tracking needs
+         to continue while the application is in background.
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+
+    <!-- ===================================================== -->
+    <!-- FOREGROUND LOCATION SERVICE                           -->
+    <!-- ===================================================== -->
+
+    <!-- Required for foreground services -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!--
+         Required on newer Android versions when a foreground
+         service is specifically using location.
+    -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!--
+         Android 13+ notification permission.
+         The foreground tracking service displays an ongoing
+         notification while operational tracking is active.
+    -->
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
+
+
+    <!-- ===================================================== -->
+    <!-- NETWORK                                               -->
+    <!-- ===================================================== -->
+
+    <!-- Required to send GPS heartbeats to the backend -->
+    <uses-permission
+        android:name="android.permission.INTERNET" />
+
 
     <application
         android:label="ganesh_bandobust_mobile"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- ARCore configuration -->
+        <!-- ================================================= -->
+        <!-- ARCore configuration                              -->
+        <!-- ================================================= -->
+
         <meta-data
             android:name="com.google.ar.core"
             android:value="optional" />
+
+
+        <!-- ================================================= -->
+        <!-- MAIN FLUTTER ACTIVITY                             -->
+        <!-- ================================================= -->
 
         <activity
             android:name=".MainActivity"
@@ -26,11 +88,6 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-
-            <!--
-                 Specifies an Android theme to apply while
-                 Flutter initializes.
-            -->
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -43,16 +100,21 @@
 
         </activity>
 
-        <!-- Required by Flutter -->
+
+        <!-- ================================================= -->
+        <!-- FLUTTER EMBEDDING                                 -->
+        <!-- ================================================= -->
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
     </application>
 
-    <!--
-         Required to query activities that can process text.
-    -->
+
+    <!-- ===================================================== -->
+    <!-- PROCESS TEXT QUERY                                    -->
+    <!-- ===================================================== -->
 
     <queries>
 

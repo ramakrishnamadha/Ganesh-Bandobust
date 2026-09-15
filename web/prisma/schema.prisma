@@ -8,9 +8,9 @@ datasource db {
 }
 
 model User {
-  id                    String   @id @default(cuid())
-  employeeId            String   @unique
-  username              String   @unique
+  id                    String    @id @default(cuid())
+  employeeId            String    @unique
+  username              String    @unique
   passwordHash          String
   name                  String
   rank                  String
@@ -18,7 +18,7 @@ model User {
   team                  String?
   role                  String
   accessLevel           Int
-  mustChangePassword    Boolean  @default(true)
+  mustChangePassword    Boolean   @default(true)
   commissionerateCode   String?
   commissionerateName   String?
   rangeCode             String?
@@ -31,14 +31,14 @@ model User {
   policeStationName     String?
   sectorCode            String?
   sectorName            String?
-  allPoliceStations     Boolean  @default(false)
-  allDivisions          Boolean  @default(false)
-  allZones              Boolean  @default(false)
-  allRanges             Boolean  @default(false)
-  status                String   @default("ACTIVE")
+  allPoliceStations     Boolean   @default(false)
+  allDivisions          Boolean   @default(false)
+  allZones              Boolean   @default(false)
+  allRanges             Boolean   @default(false)
+  status                String    @default("ACTIVE")
   lastPasswordChangedAt DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   policeStationAccesses UserPoliceStationAccess[]
 
@@ -120,20 +120,20 @@ model UserSession {
 model DeviceSession {
   id              String    @id @default(cuid())
   userSessionId   String
-  userId           String
-  deviceType       String
-  deviceId         String?
-  deviceName       String?
-  manufacturer     String?
-  model            String?
-  platform         String?
-  osVersion        String?
-  appVersion       String?
-  trackingStatus   String    @default("TRACKING_STOPPED")
-  trackingEnabled  Boolean   @default(false)
-  createdAt        DateTime  @default(now())
-  lastSeenAt       DateTime  @default(now())
-  endedAt          DateTime?
+  userId          String
+  deviceType      String
+  deviceId        String?
+  deviceName      String?
+  manufacturer    String?
+  model           String?
+  platform        String?
+  osVersion       String?
+  appVersion      String?
+  trackingStatus  String    @default("TRACKING_STOPPED")
+  trackingEnabled Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  endedAt         DateTime?
 
   userSession     UserSession              @relation(fields: [userSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   currentLocation OfficerCurrentLocation?
@@ -150,19 +150,19 @@ model DeviceSession {
 model OfficerCurrentLocation {
   id              String   @id @default(cuid())
   deviceSessionId String   @unique
-  userId           String
-  latitude         Float
-  longitude        Float
-  accuracy         Float?
-  speed            Float?
-  heading          Float?
-  batteryLevel     Int?
-  locationSource   String
-  activityStatus   String?
-  activeGpid       String?
-  capturedAt       DateTime
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  userId          String
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  speed           Float?
+  heading         Float?
+  batteryLevel    Int?
+  locationSource  String
+  activityStatus  String?
+  activeGpid      String?
+  capturedAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   deviceSession DeviceSession @relation(fields: [deviceSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -175,18 +175,18 @@ model OfficerCurrentLocation {
 model OfficerLocationHistory {
   id              String   @id @default(cuid())
   deviceSessionId String
-  userId           String
-  latitude         Float
-  longitude        Float
-  accuracy         Float?
-  speed            Float?
-  heading          Float?
-  batteryLevel     Int?
-  locationSource   String
-  eventType        String   @default("HEARTBEAT")
-  activeGpid       String?
-  capturedAt       DateTime
-  receivedAt       DateTime @default(now())
+  userId          String
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  speed           Float?
+  heading         Float?
+  batteryLevel    Int?
+  locationSource  String
+  eventType       String   @default("HEARTBEAT")
+  activeGpid      String?
+  capturedAt      DateTime
+  receivedAt      DateTime @default(now())
 
   deviceSession DeviceSession @relation(fields: [deviceSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -229,4 +229,147 @@ model ActivityEvent {
   @@index([policeStationCode])
   @@index([sectorCode])
   @@index([createdAt])
+}
+
+model InstallationCheckVisit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Checking officer snapshot
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+  clusterCode         String?
+  clusterName         String?
+
+  // Visit
+  stage           String  @default("INSTALLATION")
+  checkSource     String?
+  userSessionId   String?
+  deviceSessionId String?
+
+  // Legacy Installation/CHECKING prototype modules - retained for existing records
+  installationResult    Json?
+  volunteerResult       Json?
+  lightingResult        Json?
+  sanitationResult      Json?
+  poojaResult           Json?
+  antiDesecrationResult Json?
+
+  // Final Stage-2 Installation verification modules
+  idolInstallationResult       Json?
+  geoTaggedVerificationResult  Json?
+  clusterSectorResult           Json?
+  documentarySetupResult        Json?
+  prePlannedSetupResult         Json?
+  spectacularExhibitionResult   Json?
+
+  // Evidence / observations
+  evidenceResult Json?
+  remarks        String?
+  actionTaken    String?
+
+  // Operational status
+  status           String  @default("SAVED")
+  hasDeficiency    Boolean @default(false)
+  requiresFollowUp Boolean @default(false)
+
+  // Pooja follow-up
+  poojaApplicable Boolean  @default(false)
+  poojaCompleted  Boolean?
+  poojaPending    Boolean  @default(false)
+
+  // GPS
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Timing
+  checkStartedAt DateTime?
+  checkedAt      DateTime  @default(now())
+  submittedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([gpid])
+  @@index([gpid, checkedAt])
+  @@index([userId, checkedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([status])
+  @@index([hasDeficiency])
+  @@index([requiresFollowUp])
+  @@index([poojaPending])
+}
+
+model PreInstallationModuleAudit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Module that was submitted
+  moduleName   String
+  moduleResult Json?
+
+  // Officer snapshot at the time of submission
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+
+  // Source/session
+  source          String  @default("MOBILE")
+  userSessionId   String?
+  deviceSessionId String?
+
+  // GPS when supplied by the module
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Audit timing
+  submittedAt DateTime @default(now())
+
+  @@index([gpid])
+  @@index([gpid, moduleName])
+  @@index([gpid, submittedAt])
+  @@index([userId, submittedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([moduleName])
 }

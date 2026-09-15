@@ -155,13 +155,24 @@ void initState() {
       'jubileehills',
       'khairatabad',
       'secunderabad',
+      'central',
+      'east',
+      'west',
+      'north',
+      'begumpet',
+      'panjagutta',
+      'banjarahills',
+      'madhapur',
+      'balanagar',
+      'medchal',
     };
 
     if (southZones.contains(key)) {
       return southRange;
     }
 
-    if (northZones.contains(key)) {
+    // All zones that are not in South Range are grouped under North Range
+    if (northZones.contains(key) || key.isNotEmpty) {
       return northRange;
     }
 

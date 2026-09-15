@@ -1132,15 +1132,24 @@ export async function POST(
         body.checkStartedAt,
       );
 
-    const lightingApplicable =
-      isLightingApplicable(
-        checkedAt,
+    const isFinalStage2Submission =
+      isObject(
+        body.idolInstallationResult,
       );
 
+    const lightingApplicable =
+      isFinalStage2Submission
+        ? false
+        : isLightingApplicable(
+            checkedAt,
+          );
+
     const poojaApplicable =
-      isPoojaApplicable(
-        checkedAt,
-      );
+      isFinalStage2Submission
+        ? false
+        : isPoojaApplicable(
+            checkedAt,
+          );
 
     const poojaCompleted =
       poojaApplicable
@@ -1163,13 +1172,152 @@ export async function POST(
         body.requiresFollowUp,
       ) === true;
 
+    let finalStage2Deficiency =
+      false;
+
+    let finalStage2FollowUp =
+      false;
+
+    if (
+      isFinalStage2Submission &&
+      isObject(
+        body.idolInstallationResult,
+      )
+    ) {
+      const idolDeviation =
+        booleanValue(
+          body.idolInstallationResult
+            .deviation,
+        ) === true;
+
+      const heightChanged =
+        booleanValue(
+          body.idolInstallationResult
+            .heightSameAsPreInstallation,
+        ) === false;
+
+      const materialChanged =
+        booleanValue(
+          body.idolInstallationResult
+            .materialSameAsPreInstallation,
+        ) === false;
+
+      if (
+        idolDeviation ||
+        heightChanged ||
+        materialChanged
+      ) {
+        finalStage2Deficiency = true;
+        finalStage2FollowUp = true;
+      }
+
+      if (
+        booleanValue(
+          body.idolInstallationResult
+            .idolInstalled,
+        ) === true
+      ) {
+        if (
+          isObject(
+            body.geoTaggedVerificationResult,
+          ) &&
+          booleanValue(
+            body.geoTaggedVerificationResult
+              .installedAtVerifiedLocation,
+          ) === false
+        ) {
+          finalStage2Deficiency = true;
+          finalStage2FollowUp = true;
+        }
+
+        if (
+          isObject(
+            body.documentarySetupResult,
+          )
+        ) {
+          const documentaryChecks = [
+            body.documentarySetupResult.physicalPointBook,
+            body.documentarySetupResult.pointBookGeoTagged,
+            body.documentarySetupResult.qrCode,
+            body.documentarySetupResult.gpidBoard,
+            body.documentarySetupResult.policeNoticeBoard,
+            body.documentarySetupResult.contactDetails,
+          ];
+
+          if (
+            documentaryChecks.some(
+              (value) =>
+                booleanValue(value) === false,
+            )
+          ) {
+            finalStage2Deficiency = true;
+            finalStage2FollowUp = true;
+          }
+        }
+
+        if (
+          isObject(
+            body.prePlannedSetupResult,
+          ) &&
+          booleanValue(
+            body.prePlannedSetupResult
+              .nightKeepingPlaceSafe,
+          ) === false
+        ) {
+          finalStage2Deficiency = true;
+          finalStage2FollowUp = true;
+        }
+
+        if (
+          isObject(
+            body.spectacularExhibitionResult,
+          )
+        ) {
+          const classification =
+            text(
+              body.spectacularExhibitionResult
+                .classification,
+            ).toUpperCase();
+
+          if (
+            booleanValue(
+              body.spectacularExhibitionResult
+                .violationObserved,
+            ) === true ||
+            booleanValue(
+              body.spectacularExhibitionResult
+                .harmOrRiskObserved,
+            ) === true ||
+            booleanValue(
+              body.spectacularExhibitionResult
+                .permissionAvailable,
+            ) === false ||
+            classification === "TYPE_2" ||
+            classification === "TYPE_3"
+          ) {
+            finalStage2Deficiency = true;
+            finalStage2FollowUp = true;
+          }
+        }
+      }
+    }
+
     const hasDeficiency =
       requestedDeficiency ||
-      poojaPending;
+      (
+        isFinalStage2Submission
+          ? finalStage2Deficiency
+          : poojaPending
+      );
 
     const requiresFollowUp =
       requestedFollowUp ||
-      hasDeficiency;
+      (
+        isFinalStage2Submission
+          ? finalStage2FollowUp ||
+            hasDeficiency
+          : hasDeficiency
+      );
 
     const suppliedStatus =
       text(

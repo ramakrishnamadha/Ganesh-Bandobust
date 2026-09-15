@@ -29,8 +29,7 @@ class InstallationCheckApiService {
     return <String, String>{
       'Accept': 'application/json',
       'Cookie': cookie,
-      if (includeJsonContentType)
-        'Content-Type': 'application/json',
+      if (includeJsonContentType) 'Content-Type': 'application/json',
     };
   }
 
@@ -41,94 +40,126 @@ class InstallationCheckApiService {
       final response = await http
           .post(
             Uri.parse(_baseUrl),
-            headers: _authenticatedHeaders(
-              includeJsonContentType: true,
-            ),
+            headers: _authenticatedHeaders(includeJsonContentType: true),
             body: jsonEncode(data),
           )
-          .timeout(
-            const Duration(seconds: 90),
-          );
+          .timeout(const Duration(seconds: 90));
 
       if (response.statusCode == 401) {
         throw Exception(
           'Your login session is invalid or expired. Please login again.',
         );
       }
-
       if (response.statusCode == 403) {
         throw Exception(
           'You do not have permission to submit an Installation check for this GPID.',
         );
       }
-
       if (response.statusCode == 404) {
-        throw Exception(
-          'GPID was not found in the current GPID master.',
-        );
+        throw Exception('GPID was not found in the current GPID master.');
       }
 
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         String message =
-            'Failed to submit Installation check. '
-            'Status code: ${response.statusCode}';
-
+            'Failed to submit Installation check. Status code: ${response.statusCode}';
         if (response.body.isNotEmpty) {
           try {
-            final dynamic decodedError = jsonDecode(
-              response.body,
-            );
-
+            final dynamic decodedError = jsonDecode(response.body);
             if (decodedError is Map<String, dynamic>) {
               final dynamic apiError = decodedError['error'];
-
-              if (apiError != null &&
-                  apiError.toString().trim().isNotEmpty) {
+              if (apiError != null && apiError.toString().trim().isNotEmpty) {
                 message = apiError.toString();
               }
             }
-          } catch (_) {
-            // Keep default status-code message.
-          }
+          } catch (_) {}
         }
-
         throw Exception(message);
       }
 
-      final dynamic decoded = jsonDecode(
-        response.body,
-      );
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
 
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-
-      if (decoded is Map) {
-        return Map<String, dynamic>.from(
-          decoded,
-        );
-      }
-
-      throw Exception(
-        'Unexpected Installation API response format.',
-      );
+      throw Exception('Unexpected Installation API response format.');
     } on TimeoutException {
       throw Exception(
         'Installation check submission timed out. Please check the network and try again.',
       );
     } on FormatException {
-      throw Exception(
-        'Invalid response received from Installation API.',
-      );
+      throw Exception('Invalid response received from Installation API.');
     } on http.ClientException catch (e) {
-      throw Exception(
-        'Network error while submitting Installation check: $e',
-      );
+      throw Exception('Network error while submitting Installation check: $e');
     } catch (e) {
-      throw Exception(
-        'Unable to submit Installation check: $e',
+      throw Exception('Unable to submit Installation check: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchInstallationContext({
+    required String gpid,
+  }) async {
+    final String cleanGpid = gpid.trim();
+
+    if (cleanGpid.isEmpty) {
+      throw Exception('GPID is required to load Installation context.');
+    }
+
+    try {
+      final uri = Uri.parse(_baseUrl).replace(
+        queryParameters: <String, String>{
+          'gpid': cleanGpid,
+          'includePreInstallation': 'true',
+          'limit': '200',
+        },
       );
+
+      final response = await http
+          .get(uri, headers: _authenticatedHeaders())
+          .timeout(const Duration(seconds: 90));
+
+      if (response.statusCode == 401) {
+        throw Exception(
+          'Your login session is invalid or expired. Please login again.',
+        );
+      }
+      if (response.statusCode == 403) {
+        throw Exception(
+          'You do not have permission to view Installation information for this GPID.',
+        );
+      }
+      if (response.statusCode == 404) {
+        throw Exception('GPID was not found in the current GPID master.');
+      }
+
+      if (response.statusCode != 200) {
+        String message =
+            'Failed to load Installation context. Status code: ${response.statusCode}';
+        if (response.body.isNotEmpty) {
+          try {
+            final dynamic decodedError = jsonDecode(response.body);
+            if (decodedError is Map<String, dynamic>) {
+              final dynamic apiError = decodedError['error'];
+              if (apiError != null && apiError.toString().trim().isNotEmpty) {
+                message = apiError.toString();
+              }
+            }
+          } catch (_) {}
+        }
+        throw Exception(message);
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+
+      throw Exception('Unexpected Installation context response format.');
+    } on TimeoutException {
+      throw Exception('Installation context request timed out.');
+    } on FormatException {
+      throw Exception('Invalid Installation context data received.');
+    } on http.ClientException catch (e) {
+      throw Exception('Network error while loading Installation context: $e');
+    } catch (e) {
+      throw Exception('Unable to load Installation context: $e');
     }
   }
 
@@ -142,30 +173,21 @@ class InstallationCheckApiService {
       };
 
       final cleanGpid = gpid?.trim() ?? '';
-
       if (cleanGpid.isNotEmpty) {
         queryParameters['gpid'] = cleanGpid;
       }
 
-      final uri = Uri.parse(_baseUrl).replace(
-        queryParameters: queryParameters,
-      );
+      final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParameters);
 
       final response = await http
-          .get(
-            uri,
-            headers: _authenticatedHeaders(),
-          )
-          .timeout(
-            const Duration(seconds: 90),
-          );
+          .get(uri, headers: _authenticatedHeaders())
+          .timeout(const Duration(seconds: 90));
 
       if (response.statusCode == 401) {
         throw Exception(
           'Your login session is invalid or expired. Please login again.',
         );
       }
-
       if (response.statusCode == 403) {
         throw Exception(
           'You do not have permission to view Installation check records.',
@@ -174,60 +196,37 @@ class InstallationCheckApiService {
 
       if (response.statusCode != 200) {
         String message =
-            'Failed to load Installation check records. '
-            'Status code: ${response.statusCode}';
-
+            'Failed to load Installation check records. Status code: ${response.statusCode}';
         if (response.body.isNotEmpty) {
           try {
-            final dynamic decodedError = jsonDecode(
-              response.body,
-            );
-
+            final dynamic decodedError = jsonDecode(response.body);
             if (decodedError is Map<String, dynamic>) {
               final dynamic apiError = decodedError['error'];
-
-              if (apiError != null &&
-                  apiError.toString().trim().isNotEmpty) {
+              if (apiError != null && apiError.toString().trim().isNotEmpty) {
                 message = apiError.toString();
               }
             }
-          } catch (_) {
-            // Keep default status-code message.
-          }
+          } catch (_) {}
         }
-
         throw Exception(message);
       }
 
-      final dynamic decoded = jsonDecode(
-        response.body,
-      );
-
+      final dynamic decoded = jsonDecode(response.body);
       if (decoded is! List) {
-        throw Exception(
-          'Unexpected Installation API response format.',
-        );
+        throw Exception('Unexpected Installation API response format.');
       }
 
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .toList();
+      return decoded.whereType<Map<String, dynamic>>().toList();
     } on TimeoutException {
-      throw Exception(
-        'Installation API request timed out.',
-      );
+      throw Exception('Installation API request timed out.');
     } on FormatException {
-      throw Exception(
-        'Invalid Installation check data received.',
-      );
+      throw Exception('Invalid Installation check data received.');
     } on http.ClientException catch (e) {
       throw Exception(
         'Network error while loading Installation check records: $e',
       );
     } catch (e) {
-      throw Exception(
-        'Unable to load Installation check records: $e',
-      );
+      throw Exception('Unable to load Installation check records: $e');
     }
   }
 }

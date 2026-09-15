@@ -7,6 +7,9 @@ import '../../services/gpid_api_service.dart';
 import '../installation/installation_check_screen.dart';
 import '../login/login_screen.dart';
 import '../pre_installation/pre_installation_screen.dart';
+import '../resources/resource_command_dashboard_screen.dart';
+import '../resources/resource_directory_screen.dart';
+import '../../models/resource_enums.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String officerName;
@@ -2215,6 +2218,53 @@ void initState() {
                     _loadRecords(
                       silent: true,
                     );
+                  },
+                ),
+              ),
+              const SizedBox(
+                height: 10,
+              ),
+              Card(
+                elevation: 0,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF17365D),
+                    child: Icon(Icons.handshake, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Resource Sharing',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  subtitle: const Text('Manage & Request Resources'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    final isAdmin = widget.authenticatedUser.isAdmin;
+                    if (isAdmin) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ResourceCommandDashboardScreen(
+                            userPoliceStationId: widget.policeStation,
+                          ),
+                        ),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ResourceDirectoryScreen(
+                            userPoliceStationId: widget.policeStation,
+                            role: ResourceUserRole.fieldOfficer,
+                          ),
+                        ),
+                      );
+                    }
                   },
                 ),
               ),

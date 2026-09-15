@@ -33,37 +33,18 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
   Map<String, dynamic>? _stage1Organizer;
   List<dynamic> _previousVisits = <dynamic>[];
 
-  Position? _currentPosition;
-
   // Module 1 - Idol installation
   bool? _idolInstalledNow;
   DateTime? _installationDate;
-  bool? _heightSame;
-  final TextEditingController _actualHeightFeet = TextEditingController();
-  final TextEditingController _actualHeightInches = TextEditingController();
-  bool? _materialSame;
-  final TextEditingController _actualMaterial = TextEditingController();
-  final TextEditingController _materialRemarks = TextEditingController();
-  bool? _idolDeviation;
-  final TextEditingController _idolDeviationRemarks = TextEditingController();
   XFile? _idolFreshPhoto;
-  XFile? _idolDeviationPhoto;
-
-  // Module 2 - Geo verification
-  bool? _installedAtVerifiedLocation;
-  final TextEditingController _geoMismatchReason = TextEditingController();
-  XFile? _geoPhoto;
-  double? _distanceMetres;
 
   // Module 4 - Documentary setup
   bool? _physicalPointBook;
-  bool? _pointBookGeoTagged;
   bool? _qrCode;
   bool? _gpidBoard;
   bool? _policeNoticeBoard;
   bool? _contactDetails;
   bool _documentaryConfirmed = false;
-  Position? _documentaryPosition;
 
   // Module 5 - Pre-planned setup
   bool? _ladduApplicable;
@@ -71,21 +52,11 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
   bool? _jewelleryApplicable;
   bool? _cashGarlandApplicable;
   bool? _otherValuablesApplicable;
-  final TextEditingController _nightKeepingPlace = TextEditingController();
-  bool? _nightKeepingPlaceSafe;
-  String? _responsiblePersonType;
-  String? _selectedOrganizer;
-  final TextEditingController _otherResponsibleName = TextEditingController();
-  final TextEditingController _otherResponsibleCell = TextEditingController();
-  XFile? _otherResponsiblePhoto;
-  final TextEditingController _jewelleryDetails = TextEditingController();
-  final TextEditingController _jewelleryValue = TextEditingController();
-  final TextEditingController _cashGarlandDetails = TextEditingController();
-  final TextEditingController _cashGarlandValue = TextEditingController();
   final TextEditingController _otherValuablesDetails = TextEditingController();
-  final TextEditingController _otherValuablesValue = TextEditingController();
+  bool? _nightKeepingPlaceSafe;
   bool _prePlannedConfirmed = false;
-  Position? _prePlannedPosition;
+
+  bool _finalInstallationConfirmed = false;
 
   // Module 6 - Spectacular exhibition
   bool? _spectacularPresent;
@@ -107,21 +78,7 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
   @override
   void dispose() {
     for (final controller in <TextEditingController>[
-      _actualHeightFeet,
-      _actualHeightInches,
-      _actualMaterial,
-      _materialRemarks,
-      _idolDeviationRemarks,
-      _geoMismatchReason,
-      _nightKeepingPlace,
-      _otherResponsibleName,
-      _otherResponsibleCell,
-      _jewelleryDetails,
-      _jewelleryValue,
-      _cashGarlandDetails,
-      _cashGarlandValue,
       _otherValuablesDetails,
-      _otherValuablesValue,
       _spectacularDescription,
       _spectacularAction,
     ]) {
@@ -184,79 +141,8 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
     }
   }
 
-  Future<Position> _capturePosition() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw Exception('Please enable Location/GPS and try again.');
-    }
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied) {
-      throw Exception('Location permission was denied.');
-    }
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission is permanently denied. Enable it in App Settings.',
-      );
-    }
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-  }
-
   Future<XFile?> _takePhoto() async {
     return _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 85);
-  }
-
-  Future<void> _captureGeoVerification() async {
-    try {
-      final position = await _capturePosition();
-      final verified = _asMap(_stage1Location?['currentVerifiedGeoLocation']);
-      final lat = _toDouble(verified?['latitude']);
-      final lng = _toDouble(verified?['longitude']);
-      double? distance;
-      if (lat != null && lng != null) {
-        distance = Geolocator.distanceBetween(
-          lat,
-          lng,
-          position.latitude,
-          position.longitude,
-        );
-      }
-      if (!mounted) return;
-      setState(() {
-        _currentPosition = position;
-        _distanceMetres = distance;
-      });
-    } catch (e) {
-      _message(e.toString());
-    }
-  }
-
-  double? _toDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '');
-  }
-
-  Future<void> _captureDocumentaryGeo() async {
-    try {
-      final p = await _capturePosition();
-      if (!mounted) return;
-      setState(() => _documentaryPosition = p);
-    } catch (e) {
-      _message(e.toString());
-    }
-  }
-
-  Future<void> _capturePrePlannedGeo() async {
-    try {
-      final p = await _capturePosition();
-      if (!mounted) return;
-      setState(() => _prePlannedPosition = p);
-    } catch (e) {
-      _message(e.toString());
-    }
   }
 
   void _message(String message) {
@@ -264,31 +150,6 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
   }
-
-  List<Map<String, dynamic>> get _organizers {
-    final list = _asList(_stage1Organizer?['organizers']);
-    return list
-        .map(_asMap)
-        .whereType<Map<String, dynamic>>()
-        .toList(growable: false);
-  }
-
-  String _organizerLabel(Map<String, dynamic> item) {
-    final name = _text(item['name']);
-    final mobile = _text(item['mobile'], '');
-    final role = _text(
-      item['role'] == 'Other' ? item['otherRole'] : item['role'],
-      '',
-    );
-    return [
-      name,
-      if (role.isNotEmpty) role,
-      if (mobile.isNotEmpty) mobile,
-    ].join(' • ');
-  }
-
-  Map<String, dynamic>? get _verifiedStage1Geo =>
-      _asMap(_stage1Location?['currentVerifiedGeoLocation']);
 
   bool get _stage1IdolWasInstalled =>
       _boolValue(_stage1Idol?['idolInstalled']) == true;
@@ -306,47 +167,8 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       }
     }
     if (_idolInstalledNow == true) {
-      if (_heightSame == null) {
-        return 'Confirm whether Idol height is the same.';
-      }
-      if (_heightSame == false &&
-          (_actualHeightFeet.text.trim().isEmpty &&
-              _actualHeightInches.text.trim().isEmpty)) {
-        return 'Enter actual Idol height.';
-      }
-      if (_materialSame == null) {
-        return 'Confirm whether Idol material is the same.';
-      }
-      if (_materialSame == false &&
-          (_actualMaterial.text.trim().isEmpty ||
-              _materialRemarks.text.trim().isEmpty)) {
-        return 'Enter actual Idol material and remarks.';
-      }
-      if (_idolDeviation == null) {
-        return 'Confirm whether there is any Idol deviation.';
-      }
-      if (_idolDeviation == true && _idolDeviationRemarks.text.trim().isEmpty) {
-        return 'Enter Idol deviation remarks.';
-      }
-
-      if (_currentPosition == null) {
-        return 'Capture current GPS for Geo-Tagged Verification.';
-      }
-      if (_installedAtVerifiedLocation == null) {
-        return 'Confirm whether the Idol is installed at the verified location.';
-      }
-      if (_installedAtVerifiedLocation == false) {
-        if (_geoMismatchReason.text.trim().isEmpty) {
-          return 'Enter reason/remarks for location mismatch.';
-        }
-        if (_geoPhoto == null) {
-          return 'Take the mandatory geo-tagged photo for location mismatch.';
-        }
-      }
-
       final documentaryValues = <bool?>[
         _physicalPointBook,
-        _pointBookGeoTagged,
         _qrCode,
         _gpidBoard,
         _policeNoticeBoard,
@@ -354,9 +176,6 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       ];
       if (documentaryValues.any((e) => e == null)) {
         return 'Complete all Documentary Setup checks.';
-      }
-      if (_pointBookGeoTagged == true && _documentaryPosition == null) {
-        return 'Capture GPS for the geo-tagged Point Book.';
       }
       if (!_documentaryConfirmed) {
         return 'Confirm the Documentary Setup declaration.';
@@ -372,39 +191,11 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       if (plannedValues.any((e) => e == null)) {
         return 'Complete applicability of all Pre-Planned Setup valuables.';
       }
-      if (_nightKeepingPlace.text.trim().isEmpty) {
-        return 'Enter the place where valuables will be kept at night.';
-      }
       if (_nightKeepingPlaceSafe == null) {
-        return 'Confirm whether the night keeping place is safe.';
+        return 'Confirm whether safe preservation during night is planned.';
       }
-      if (_responsiblePersonType == null) {
-        return 'Select the responsible person.';
-      }
-      if (_responsiblePersonType == 'ORGANIZER' &&
-          (_selectedOrganizer == null || _selectedOrganizer!.isEmpty)) {
-        return 'Select the responsible organizer.';
-      }
-      if (_responsiblePersonType == 'OTHER' &&
-          (_otherResponsibleName.text.trim().isEmpty ||
-              _otherResponsibleCell.text.trim().isEmpty ||
-              _otherResponsiblePhoto == null)) {
-        return 'Enter Other responsible person name, cell number and photo.';
-      }
-      if (_jewelleryApplicable == true &&
-          (_jewelleryDetails.text.trim().isEmpty ||
-              _jewelleryValue.text.trim().isEmpty)) {
-        return 'Enter Jewellery details and approximate value.';
-      }
-      if (_cashGarlandApplicable == true &&
-          (_cashGarlandDetails.text.trim().isEmpty ||
-              _cashGarlandValue.text.trim().isEmpty)) {
-        return 'Enter Cash Garland details and approximate value.';
-      }
-      if (_otherValuablesApplicable == true &&
-          (_otherValuablesDetails.text.trim().isEmpty ||
-              _otherValuablesValue.text.trim().isEmpty)) {
-        return 'Enter Other valuables details and approximate value.';
+      if (_otherValuablesApplicable == true && _otherValuablesDetails.text.trim().isEmpty) {
+        return 'Enter Other valuables details.';
       }
       if (!_prePlannedConfirmed) {
         return 'Confirm the Pre-Planned Installation Setup.';
@@ -430,6 +221,9 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       if (!_spectacularConfirmed) {
         return 'Confirm the Spectacular Exhibition verification.';
       }
+      if (!_finalInstallationConfirmed) {
+        return 'Confirm the final installation verification declaration.';
+      }
     }
     return null;
   }
@@ -445,13 +239,6 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
     setState(() => _submitting = true);
     final now = DateTime.now();
 
-    final selectedOrganizerMap = _selectedOrganizer == null
-        ? null
-        : _organizers.cast<Map<String, dynamic>?>().firstWhere(
-            (e) => _organizerLabel(e!) == _selectedOrganizer,
-            orElse: () => null,
-          );
-
     final payload = <String, dynamic>{
       'gpid': widget.applicationId,
       'applicationId': widget.applicationId,
@@ -465,52 +252,11 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
         'stage1DeclaredHeight': _stage1Idol?['declaredIdolHeight'],
         'stage1ActualHeightFeet': _stage1Idol?['actualHeightFeet'],
         'stage1ActualHeightInches': _stage1Idol?['actualHeightInches'],
-        'heightSameAsPreInstallation': _heightSame,
-        'actualHeightFeet': _heightSame == false
-            ? _actualHeightFeet.text.trim()
-            : null,
-        'actualHeightInches': _heightSame == false
-            ? _actualHeightInches.text.trim()
-            : null,
         'stage1Material': _stage1Idol?['idolMaterial'],
-        'materialSameAsPreInstallation': _materialSame,
-        'actualMaterial': _materialSame == false
-            ? _actualMaterial.text.trim()
-            : null,
-        'materialRemarks': _materialSame == false
-            ? _materialRemarks.text.trim()
-            : null,
         'stage1PhotoPath': _stage1Idol?['idolPhotoPath'],
         'freshInstallationPhotoPath': _idolFreshPhoto?.path,
-        'deviation': _idolDeviation,
-        'deviationRemarks': _idolDeviation == true
-            ? _idolDeviationRemarks.text.trim()
-            : null,
-        'deviationPhotoPath': _idolDeviationPhoto?.path,
         'verifiedAt': now.toIso8601String(),
       },
-      'geoTaggedVerificationResult': _idolInstalledNow == true
-          ? <String, dynamic>{
-              'stage1VerifiedGeoLocation': _verifiedStage1Geo,
-              'currentGeoLocation': _currentPosition == null
-                  ? null
-                  : <String, dynamic>{
-                      'latitude': _currentPosition!.latitude,
-                      'longitude': _currentPosition!.longitude,
-                      'accuracy': _currentPosition!.accuracy,
-                      'capturedAt': now.toIso8601String(),
-                    },
-              'distanceMetres': _distanceMetres,
-              'installedAtVerifiedLocation': _installedAtVerifiedLocation,
-              'mismatchReasonOrRemarks': _installedAtVerifiedLocation == false
-                  ? _geoMismatchReason.text.trim()
-                  : null,
-              'mismatchPhotoPath': _installedAtVerifiedLocation == false
-                  ? _geoPhoto?.path
-                  : null,
-              'verifiedAt': now.toIso8601String(),
-            }
-          : null,
       'clusterSectorResult': <String, dynamic>{
         'status': 'AUTHORITATIVE_DEPLOYMENT_DATA_NOT_AVAILABLE',
         'sector': null,
@@ -523,18 +269,10 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       'documentarySetupResult': _idolInstalledNow == true
           ? <String, dynamic>{
               'physicalPointBook': _physicalPointBook,
-              'pointBookGeoTagged': _pointBookGeoTagged,
               'qrCode': _qrCode,
               'gpidBoard': _gpidBoard,
               'policeNoticeBoard': _policeNoticeBoard,
               'contactDetails': _contactDetails,
-              'pointBookGeoLocation': _documentaryPosition == null
-                  ? null
-                  : <String, dynamic>{
-                      'latitude': _documentaryPosition!.latitude,
-                      'longitude': _documentaryPosition!.longitude,
-                      'accuracy': _documentaryPosition!.accuracy,
-                    },
               'confirmed': _documentaryConfirmed,
               'confirmationText': 'I have physically verified the above Documentary Setup at the Ganesh Mandap and confirm that the information recorded above is correct.',
               'verifiedAt': now.toIso8601String(),
@@ -547,43 +285,9 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
               'jewelleryApplicable': _jewelleryApplicable,
               'cashGarlandApplicable': _cashGarlandApplicable,
               'otherValuablesApplicable': _otherValuablesApplicable,
-              'nightKeepingPlace': _nightKeepingPlace.text.trim(),
+              'otherValuablesDetails': _otherValuablesApplicable == true ? _otherValuablesDetails.text.trim() : null,
               'nightKeepingPlaceSafe': _nightKeepingPlaceSafe,
-              'responsiblePersonType': _responsiblePersonType,
-              'responsibleOrganizer': selectedOrganizerMap,
-              'otherResponsiblePerson': _responsiblePersonType == 'OTHER'
-                  ? <String, dynamic>{
-                      'name': _otherResponsibleName.text.trim(),
-                      'cell': _otherResponsibleCell.text.trim(),
-                      'photoPath': _otherResponsiblePhoto?.path,
-                    }
-                  : null,
-              'jewellery': _jewelleryApplicable == true
-                  ? <String, dynamic>{
-                      'details': _jewelleryDetails.text.trim(),
-                      'approximateValue': _jewelleryValue.text.trim(),
-                    }
-                  : null,
-              'cashGarland': _cashGarlandApplicable == true
-                  ? <String, dynamic>{
-                      'details': _cashGarlandDetails.text.trim(),
-                      'approximateValue': _cashGarlandValue.text.trim(),
-                    }
-                  : null,
-              'otherValuables': _otherValuablesApplicable == true
-                  ? <String, dynamic>{
-                      'details': _otherValuablesDetails.text.trim(),
-                      'approximateValue': _otherValuablesValue.text.trim(),
-                    }
-                  : null,
               'confirmation': _prePlannedConfirmed,
-              'geoLocation': _prePlannedPosition == null
-                  ? null
-                  : <String, dynamic>{
-                      'latitude': _prePlannedPosition!.latitude,
-                      'longitude': _prePlannedPosition!.longitude,
-                      'accuracy': _prePlannedPosition!.accuracy,
-                    },
               'verifiedAt': now.toIso8601String(),
             }
           : null,
@@ -803,8 +507,6 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
       );
     }
 
-    final verifiedGeo = _verifiedStage1Geo;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Installation Verification')),
       body: SafeArea(
@@ -898,176 +600,12 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-              if (_idolInstalledNow == true) ...[
-                _yesNo(
-                  label: 'Is actual Idol height the same as Stage 1?',
-                  value: _heightSame,
-                  onChanged: (v) => setState(() => _heightSame = v),
-                ),
-                if (_heightSame == false)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _actualHeightFeet,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Actual Feet',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _actualHeightInches,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Actual Inches',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 14),
-                _yesNo(
-                  label: 'Is actual Idol material the same as Stage 1?',
-                  value: _materialSame,
-                  onChanged: (v) => setState(() => _materialSame = v),
-                ),
-                if (_materialSame == false) ...[
-                  TextField(
-                    controller: _actualMaterial,
-                    decoration: const InputDecoration(
-                      labelText: 'Actual Material',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _materialRemarks,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Reason / Remarks',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                _yesNo(
-                  label: 'Any deviation from Pre-Installation verification?',
-                  value: _idolDeviation,
-                  onChanged: (v) => setState(() => _idolDeviation = v),
-                ),
-                if (_idolDeviation == true) ...[
-                  TextField(
-                    controller: _idolDeviationRemarks,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Mandatory Deviation Remarks',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _photoButton(
-                    label: 'Add Supporting Deviation Photo (Optional)',
-                    photo: _idolDeviationPhoto,
-                    onPressed: () async {
-                      final p = await _takePhoto();
-                      if (p != null && mounted) {
-                        setState(() => _idolDeviationPhoto = p);
-                      }
-                    },
-                  ),
-                ],
-              ],
             ]),
 
             if (_idolInstalledNow == true)
               _card([
                 _sectionTitle(
                   '2',
-                  'Geo-Tagged Verification',
-                  subtitle: 'Compare the present installation with the Stage-1 verified location.',
-                ),
-                _readonly('Stage-1 Latitude', verifiedGeo?['latitude']),
-                _readonly('Stage-1 Longitude', verifiedGeo?['longitude']),
-                _readonly('Stage-1 Accuracy', verifiedGeo?['accuracy']),
-                _readonly('Stage-1 Captured', verifiedGeo?['capturedAt']),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: _captureGeoVerification,
-                  icon: const Icon(Icons.my_location),
-                  label: Text(
-                    _currentPosition == null
-                        ? 'Capture Current GPS'
-                        : 'Recapture Current GPS',
-                  ),
-                ),
-                if (_currentPosition != null) ...[
-                  const SizedBox(height: 12),
-                  _readonly(
-                    'Current Latitude',
-                    _currentPosition!.latitude.toStringAsFixed(6),
-                  ),
-                  _readonly(
-                    'Current Longitude',
-                    _currentPosition!.longitude.toStringAsFixed(6),
-                  ),
-                  _readonly(
-                    'GPS Accuracy',
-                    '${_currentPosition!.accuracy.toStringAsFixed(1)} m',
-                  ),
-                  _readonly(
-                    'Distance',
-                    _distanceMetres == null
-                        ? 'Stage-1 GPS unavailable'
-                        : '${_distanceMetres!.toStringAsFixed(1)} m',
-                  ),
-                  const SizedBox(height: 8),
-                  _yesNo(
-                    label: 'Idol installed at the Stage-1 verified location?',
-                    value: _installedAtVerifiedLocation,
-                    onChanged: (v) =>
-                        setState(() => _installedAtVerifiedLocation = v),
-                  ),
-                  if (_installedAtVerifiedLocation == false) ...[
-                    TextField(
-                      controller: _geoMismatchReason,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Mandatory Reason / Remarks',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _photoButton(
-                      label: 'Take Mandatory Geo-Tagged Photo',
-                      photo: _geoPhoto,
-                      onPressed: () async {
-                        try {
-                          final p = await _takePhoto();
-                          if (p == null) return;
-                          final pos = await _capturePosition();
-                          if (!mounted) return;
-                          setState(() {
-                            _geoPhoto = p;
-                            _currentPosition = pos;
-                          });
-                        } catch (e) {
-                          _message(e.toString());
-                        }
-                      },
-                    ),
-                  ],
-                ],
-              ]),
-
-            if (_idolInstalledNow == true)
-              _card([
-                _sectionTitle(
-                  '3',
                   'Cluster & Sector',
                   subtitle: 'Only authoritative deployment-master information may be displayed.',
                 ),
@@ -1087,33 +625,12 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
 
             if (_idolInstalledNow == true)
               _card([
-                _sectionTitle('4', 'Documentary Setup'),
+                _sectionTitle('3', 'Documentary Setup'),
                 _yesNo(
                   label: 'Physical Point Book available?',
                   value: _physicalPointBook,
                   onChanged: (v) => setState(() => _physicalPointBook = v),
                 ),
-                _yesNo(
-                  label: 'Point Book Geo-Tagged?',
-                  value: _pointBookGeoTagged,
-                  onChanged: (v) {
-                    setState(() {
-                      _pointBookGeoTagged = v;
-                      if (v != true) _documentaryPosition = null;
-                    });
-                  },
-                ),
-                if (_pointBookGeoTagged == true)
-                  OutlinedButton.icon(
-                    onPressed: _captureDocumentaryGeo,
-                    icon: const Icon(Icons.location_on_outlined),
-                    label: Text(
-                      _documentaryPosition == null
-                          ? 'Capture Point Book GPS'
-                          : 'GPS Captured - Recapture',
-                    ),
-                  ),
-                const SizedBox(height: 10),
                 _yesNo(
                   label: 'QR Code available?',
                   value: _qrCode,
@@ -1149,7 +666,7 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
             if (_idolInstalledNow == true)
               _card([
                 _sectionTitle(
-                  '5',
+                  '4',
                   'Pre-Planned Installation Setup',
                   subtitle: 'Record the planned night custody and responsibility for valuables.',
                 ),
@@ -1168,49 +685,11 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
                   value: _jewelleryApplicable,
                   onChanged: (v) => setState(() => _jewelleryApplicable = v),
                 ),
-                if (_jewelleryApplicable == true) ...[
-                  TextField(
-                    controller: _jewelleryDetails,
-                    decoration: const InputDecoration(
-                      labelText: 'Jewellery Details',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _jewelleryValue,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Approximate Value',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
                 _yesNo(
                   label: 'Cash Garland applicable?',
                   value: _cashGarlandApplicable,
                   onChanged: (v) => setState(() => _cashGarlandApplicable = v),
                 ),
-                if (_cashGarlandApplicable == true) ...[
-                  TextField(
-                    controller: _cashGarlandDetails,
-                    decoration: const InputDecoration(
-                      labelText: 'Cash Garland Details',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _cashGarlandValue,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Approximate Value',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
                 _yesNo(
                   label: 'Other valuables applicable?',
                   value: _otherValuablesApplicable,
@@ -1225,118 +704,12 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _otherValuablesValue,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Approximate Value',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
                   const SizedBox(height: 14),
                 ],
-                TextField(
-                  controller: _nightKeepingPlace,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Place where valuables will be kept at night',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 14),
                 _yesNo(
-                  label: 'Is the proposed keeping place safe?',
+                  label: 'Whether safe preservation of the above items during night is planned?',
                   value: _nightKeepingPlaceSafe,
                   onChanged: (v) => setState(() => _nightKeepingPlaceSafe = v),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: _responsiblePersonType,
-                  decoration: const InputDecoration(
-                    labelText: 'Responsible Person',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'ORGANIZER',
-                      child: Text('Organizer - Stage 1'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'OTHER',
-                      child: Text('Other Person'),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _responsiblePersonType = v;
-                    _selectedOrganizer = null;
-                  }),
-                ),
-                const SizedBox(height: 12),
-                if (_responsiblePersonType == 'ORGANIZER')
-                  if (_organizers.isEmpty)
-                    const Text(
-                      'No Stage-1 Organizer list is available.',
-                      style: TextStyle(color: Color(0xFFB45309)),
-                    )
-                  else
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedOrganizer,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Select Organizer',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _organizers
-                          .map(
-                            (e) => DropdownMenuItem<String>(
-                              value: _organizerLabel(e),
-                              child: Text(
-                                _organizerLabel(e),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedOrganizer = v),
-                    ),
-                if (_responsiblePersonType == 'OTHER') ...[
-                  TextField(
-                    controller: _otherResponsibleName,
-                    decoration: const InputDecoration(
-                      labelText: 'Responsible Person Name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _otherResponsibleCell,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Cell Number',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _photoButton(
-                    label: 'Take Responsible Person Photo',
-                    photo: _otherResponsiblePhoto,
-                    onPressed: () async {
-                      final p = await _takePhoto();
-                      if (p != null && mounted) {
-                        setState(() => _otherResponsiblePhoto = p);
-                      }
-                    },
-                  ),
-                ],
-                const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  onPressed: _capturePrePlannedGeo,
-                  icon: const Icon(Icons.my_location),
-                  label: Text(
-                    _prePlannedPosition == null
-                        ? 'Capture Verification GPS'
-                        : 'Verification GPS Captured - Recapture',
-                  ),
                 ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1352,7 +725,7 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
 
             if (_idolInstalledNow == true)
               _card([
-                _sectionTitle('6', 'Spectacular Exhibition'),
+                _sectionTitle('5', 'Spectacular Exhibition'),
                 _yesNo(
                   label: 'Any Spectacular Exhibition present?',
                   value: _spectacularPresent,
@@ -1453,6 +826,20 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
                   ),
               ]),
 
+            if (_idolInstalledNow == true) ...[
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _finalInstallationConfirmed,
+                onChanged: (v) =>
+                    setState(() => _finalInstallationConfirmed = v == true),
+                title: const Text(
+                  'I confirm that the above details have been physically verified by me and correctly recorded.',
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ],
+
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: _submitting ? null : _submit,
@@ -1466,7 +853,7 @@ class _InstallationCheckScreenState extends State<InstallationCheckScreen> {
               label: Text(
                 _submitting
                     ? 'Submitting...'
-                    : 'Submit Stage 2 Installation Verification',
+                    : 'SUBMIT INSTALLATION VERIFICATION',
               ),
             ),
             const SizedBox(height: 24),

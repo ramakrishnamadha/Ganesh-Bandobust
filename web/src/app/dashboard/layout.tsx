@@ -8,6 +8,7 @@ import {
   SESSION_COOKIE_NAME,
   verifySessionToken,
 } from "@/lib/server/auth";
+import DashboardNav from "@/components/DashboardNav";
 
 export default async function DashboardLayout({
   children,
@@ -46,5 +47,12 @@ export default async function DashboardLayout({
     redirect("/change-password");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <DashboardNav />
+      <main className="flex-1 w-full max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {children}
+      </main>
+    </div>
+  );
 }

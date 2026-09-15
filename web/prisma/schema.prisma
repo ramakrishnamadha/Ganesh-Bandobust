@@ -275,12 +275,12 @@ model InstallationCheckVisit {
   antiDesecrationResult Json?
 
   // Final Stage-2 Installation verification modules
-  idolInstallationResult       Json?
-  geoTaggedVerificationResult  Json?
-  clusterSectorResult           Json?
-  documentarySetupResult        Json?
-  prePlannedSetupResult         Json?
-  spectacularExhibitionResult   Json?
+  idolInstallationResult      Json?
+  geoTaggedVerificationResult Json?
+  clusterSectorResult         Json?
+  documentarySetupResult      Json?
+  prePlannedSetupResult       Json?
+  spectacularExhibitionResult Json?
 
   // Evidence / observations
   evidenceResult Json?
@@ -372,4 +372,93 @@ model PreInstallationModuleAudit {
   @@index([divisionCode])
   @@index([zoneCode])
   @@index([moduleName])
+}
+
+model FestivityCheckVisit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Stage 3 festival day/date
+  festivalDay  Int
+  festivalDate DateTime
+
+  // Checking officer snapshot
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+  clusterCode         String?
+  clusterName         String?
+
+  // Stage 3 modules
+  antiDigressionResult Json?
+  volunteerResult      Json?
+  lightingResult       Json?
+  sanitationResult     Json?
+  poojaResult          Json?
+  soundSystemResult    Json?
+  fireSafetyResult     Json?
+
+  // Evidence / observations
+  evidenceResult Json?
+  remarks        String?
+  actionTaken    String?
+
+  // Operational status
+  status           String  @default("SAVED")
+  hasDeficiency    Boolean @default(false)
+  requiresFollowUp Boolean @default(false)
+
+  // Pending / recheck flags
+  poojaPending      Boolean @default(false)
+  soundPending      Boolean @default(false)
+  fireSafetyPending Boolean @default(false)
+
+  // GPS
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Source/session
+  checkSource     String?
+  userSessionId   String?
+  deviceSessionId String?
+
+  // Timing
+  checkStartedAt DateTime?
+  checkedAt      DateTime  @default(now())
+  submittedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([gpid])
+  @@index([gpid, festivalDay])
+  @@index([gpid, festivalDate])
+  @@index([gpid, checkedAt])
+  @@index([userId, checkedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([status])
+  @@index([hasDeficiency])
+  @@index([requiresFollowUp])
+  @@index([poojaPending])
+  @@index([soundPending])
+  @@index([fireSafetyPending])
 }

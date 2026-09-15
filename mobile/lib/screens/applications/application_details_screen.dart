@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../festivity/festivity_check_screen.dart';
 import '../installation/installation_check_screen.dart';
 import '../pre_installation/pre_installation_screen.dart';
 
@@ -65,9 +66,7 @@ class ApplicationDetailsScreen extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 18),
-
             const Text(
               'Verification',
               style: TextStyle(
@@ -75,9 +74,7 @@ class ApplicationDetailsScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 10),
-
             Card(
               child: ListTile(
                 leading: const CircleAvatar(
@@ -113,9 +110,7 @@ class ApplicationDetailsScreen extends StatelessWidget {
                 },
               ),
             ),
-
             const SizedBox(height: 12),
-
             Card(
               child: ListTile(
                 leading: const CircleAvatar(
@@ -144,6 +139,42 @@ class ApplicationDetailsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => InstallationCheckScreen(
+                        applicationId: applicationId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF17365D),
+                  child: Text(
+                    '3',
+                    style: TextStyle(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                title: const Text(
+                  'Festivity Checking',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Stage 3 daily festivity checking',
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FestivityCheckScreen(
                         applicationId: applicationId,
                       ),
                     ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/gpid_api_service.dart';
+import '../festivity/festivity_check_screen.dart';
 import '../installation/installation_check_screen.dart';
 import '../login/login_screen.dart';
 import '../pre_installation/pre_installation_screen.dart';
@@ -699,15 +700,19 @@ void initState() {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _activeStage == 2
-            ? InstallationCheckScreen(
+        builder: (_) => _activeStage == 3
+            ? FestivityCheckScreen(
                 applicationId: gpid,
-                ganeshRecord: record,
               )
-            : PreInstallationScreen(
-                applicationId: gpid,
-                ganeshRecord: record,
-              ),
+            : _activeStage == 2
+                ? InstallationCheckScreen(
+                    applicationId: gpid,
+                    ganeshRecord: record,
+                  )
+                : PreInstallationScreen(
+                    applicationId: gpid,
+                    ganeshRecord: record,
+                  ),
       ),
     );
   }
@@ -2321,12 +2326,22 @@ void initState() {
                   });
                 },
               ),
-              const _StageTile(
+              _StageTile(
                 number: '3',
                 title:
                     'During Festivity',
                 status:
-                    'Not Started',
+                    _activeStage == 3
+                        ? 'ACTIVE'
+                        : 'Available',
+                active:
+                    _activeStage == 3,
+                unlocked: true,
+                onTap: () {
+                  setState(() {
+                    _activeStage = 3;
+                  });
+                },
               ),
               const _StageTile(
                 number: '4',
@@ -2478,9 +2493,11 @@ class _ScopedGpidListScreen
             Colors.white,
         title:
             Text(
-          stage == 2
-              ? 'Installation - Accessible GPIDs'
-              : 'Pre-Installation - Accessible GPIDs',
+          stage == 3
+              ? 'During Festivity - Accessible GPIDs'
+              : stage == 2
+                  ? 'Installation - Accessible GPIDs'
+                  : 'Pre-Installation - Accessible GPIDs',
           style:
               const TextStyle(
             fontWeight:
@@ -2597,19 +2614,24 @@ class _ScopedGpidListScreen
                                           void>(
                                         builder:
                                             (_) =>
-                                                stage == 2
-                                                    ? InstallationCheckScreen(
+                                                stage == 3
+                                                    ? FestivityCheckScreen(
                                                         applicationId:
                                                             gpid,
-                                                        ganeshRecord:
-                                                            record,
                                                       )
-                                                    : PreInstallationScreen(
-                                                        applicationId:
-                                                            gpid,
-                                                        ganeshRecord:
-                                                            record,
-                                                      ),
+                                                    : stage == 2
+                                                        ? InstallationCheckScreen(
+                                                            applicationId:
+                                                                gpid,
+                                                            ganeshRecord:
+                                                                record,
+                                                          )
+                                                        : PreInstallationScreen(
+                                                            applicationId:
+                                                                gpid,
+                                                            ganeshRecord:
+                                                                record,
+                                                          ),
                                       ),
                                     );
                                   },

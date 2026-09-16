@@ -186,6 +186,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return false;
     }
 
+    // Normal PS-level users, including FIELD_OFFICER, must be able
+    // to access GPIDs belonging to their primary assigned Police Station.
+    final primaryPoliceStation = user.policeStationName?.trim() ?? '';
+
+    if (
+      primaryPoliceStation.isNotEmpty &&
+      _sameAccessName(record['ps_name'], primaryPoliceStation)
+    ) {
+      return true;
+    }
+
+    // Also preserve any additional Police Station access explicitly
+    // granted to the user with canView = true.
     final allowedNames = user.allowedPoliceStations
         .where((access) => access.canView)
         .map(
@@ -230,15 +243,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    final count = user.allowedPoliceStations
-        .where((access) => access.canView)
+    final primaryPoliceStation = user.policeStationName?.trim() ?? '';
+
+    final additionalCount = user.allowedPoliceStations
+        .where(
+          (access) =>
+              access.canView &&
+              _normalizeAccessName(access.policeStationName) !=
+                  _normalizeAccessName(primaryPoliceStation),
+        )
         .length;
 
-    if (count == 1) {
+    final totalCount =
+        (primaryPoliceStation.isNotEmpty ? 1 : 0) + additionalCount;
+
+    if (primaryPoliceStation.isNotEmpty && totalCount == 1) {
+      return '$primaryPoliceStation Police Station';
+    }
+
+    if (totalCount == 1) {
       return '1 Police Station';
     }
 
-    return '$count Police Stations';
+    return '$totalCount Police Stations';
   }
 
   Future<void> _loadRecords({

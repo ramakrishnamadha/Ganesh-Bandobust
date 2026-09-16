@@ -31,6 +31,54 @@ type GaneshRecord = {
   riv_name?: string;
 };
 
+type FestivityCheckVisit = {
+  id?: string;
+  gpid?: string;
+  applicationId?: string | null;
+
+  festivalDay?: number;
+  festivalDate?: string;
+
+  officerEmployeeId?: string | null;
+  officerName?: string | null;
+  officerRank?: string | null;
+  officerRole?: string | null;
+
+  rangeName?: string | null;
+  zoneName?: string | null;
+  divisionName?: string | null;
+  policeStationName?: string | null;
+  sectorName?: string | null;
+
+  antiDigressionResult?: unknown;
+  volunteerResult?: unknown;
+  lightingResult?: unknown;
+  sanitationResult?: unknown;
+  poojaResult?: unknown;
+  soundSystemResult?: unknown;
+  fireSafetyResult?: unknown;
+
+  remarks?: string | null;
+  actionTaken?: string | null;
+
+  status?: string | null;
+  hasDeficiency?: boolean;
+  requiresFollowUp?: boolean;
+
+  poojaPending?: boolean;
+  soundPending?: boolean;
+  fireSafetyPending?: boolean;
+
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+
+  checkSource?: string | null;
+
+  checkStartedAt?: string | null;
+  checkedAt?: string;
+};
+
 type RangeName =
   | "South Range"
   | "North Range";
@@ -122,6 +170,20 @@ export default function Dashboard() {
 
   const [gpidError, setGpidError] =
     useState("");
+const [
+  festivityChecks,
+  setFestivityChecks,
+] = useState<FestivityCheckVisit[]>([]);
+
+const [
+  loadingFestivityChecks,
+  setLoadingFestivityChecks,
+] = useState(true);
+
+const [
+  festivityCheckError,
+  setFestivityCheckError,
+] = useState("");
 
   const [searchText, setSearchText] =
     useState("");
@@ -279,6 +341,81 @@ export default function Dashboard() {
       );
     };
   }, []);
+  useEffect(() => {
+    let active = true;
+
+    const loadFestivityChecks = async () => {
+      try {
+        const response = await fetch(
+          "/api/festivity-checks?limit=500",
+          {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load festivity checking records.",
+          );
+        }
+
+        const data: unknown =
+          await response.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error(
+            "Unexpected festivity checking response.",
+          );
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setFestivityChecks(
+          data as FestivityCheckVisit[],
+        );
+
+        setFestivityCheckError("");
+      } catch (error) {
+        console.error(
+          "Dashboard festivity checking error:",
+          error,
+        );
+
+        if (!active) {
+          return;
+        }
+
+        setFestivityCheckError(
+          "Unable to load checking data.",
+        );
+      } finally {
+        if (active) {
+          setLoadingFestivityChecks(false);
+        }
+      }
+    };
+
+    const initialTimer =
+      window.setTimeout(() => {
+        void loadFestivityChecks();
+      }, 0);
+
+    const refreshTimer =
+      window.setInterval(() => {
+        void loadFestivityChecks();
+      }, 30000);
+
+    return () => {
+      active = false;
+
+      window.clearTimeout(initialTimer);
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
 
   const summary =
     useMemo(() => {
@@ -336,7 +473,85 @@ export default function Dashboard() {
           policeStations.size,
       };
     }, [records]);
+  const checkingSummary =
+    useMemo(() => {
+      const uniqueGpids =
+        new Set<string>();
 
+      const gpidVisitCounts =
+        new Map<string, number>();
+
+      let deficiencies = 0;
+      let followUps = 0;
+      let actionsTaken = 0;
+
+      for (const visit of festivityChecks) {
+        const gpid =
+          String(
+            visit.gpid ?? "",
+          ).trim();
+
+        if (gpid) {
+          uniqueGpids.add(gpid);
+
+          gpidVisitCounts.set(
+            gpid,
+            (gpidVisitCounts.get(gpid) ?? 0) + 1,
+          );
+        }
+
+        if (visit.hasDeficiency === true) {
+          deficiencies += 1;
+        }
+
+        if (visit.requiresFollowUp === true) {
+          followUps += 1;
+        }
+
+        if (
+          String(
+            visit.actionTaken ?? "",
+          ).trim().length > 0
+        ) {
+          actionsTaken += 1;
+        }
+      }
+
+      const repeatedGpids =
+        Array.from(
+          gpidVisitCounts.values(),
+        ).filter(
+          (count) => count > 1,
+        ).length;
+
+      const pendingGpids =
+        Math.max(
+          records.length - uniqueGpids.size,
+          0,
+        );
+
+      return {
+        totalVisits:
+          festivityChecks.length,
+
+        uniqueGpids:
+          uniqueGpids.size,
+
+        repeatedGpids,
+
+        pendingGpids,
+
+        deficiencies,
+
+        followUps,
+
+        actionsTaken,
+      };
+    }, [
+      festivityChecks,
+      records,
+    ]);
+    
   const rangeSummary =
     useMemo<RangeSummary[]>(() => {
       const rangeMap =
@@ -1121,6 +1336,7 @@ export default function Dashboard() {
         </div>
       </header>
 
+
       <div className="max-w-7xl mx-auto px-6 py-8">
         <section className="bg-white rounded-xl shadow-sm p-5 mb-7">
           <div className="grid md:grid-cols-4 gap-5">
@@ -1206,6 +1422,142 @@ export default function Dashboard() {
             ),
           )}
         </section>
+<section className="mb-8">
+  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-slate-800">
+        Checking Reports
+      </h2>
+
+      <p className="text-sm text-slate-500">
+        Live Stage-3 checking status based on saved field visits.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        router.push("/dashboard/checking")
+      }
+      className="rounded-lg bg-[#17365D] px-4 py-2 text-sm font-semibold text-white hover:bg-[#234d7d]"
+    >
+      Open Checking Dashboard
+    </button>
+  </div>
+
+  {festivityCheckError && (
+    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {festivityCheckError}
+    </div>
+  )}
+
+  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-[#17365D]">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.totalVisits.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Total Checking Visits
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-[#17365D]">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.uniqueGpids.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        GPIDs Checked
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-[#17365D]">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.repeatedGpids.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Re-Checked GPIDs
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-[#17365D]">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.pendingGpids.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Pending GPIDs
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-red-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-red-700">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.deficiencies.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Deficiencies Found
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-amber-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-amber-700">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.followUps.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Follow-Up Required
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-emerald-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-emerald-700">
+        {loadingFestivityChecks
+          ? "..."
+          : checkingSummary.actionsTaken.toLocaleString(
+              "en-IN",
+            )}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Actions Taken
+      </p>
+    </div>
+
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-3xl font-bold text-[#17365D]">
+        {loadingFestivityChecks
+          ? "..."
+          : (
+              checkingSummary.totalVisits -
+              checkingSummary.deficiencies
+            ).toLocaleString("en-IN")}
+      </div>
+      <p className="mt-2 text-sm text-slate-600">
+        Checks Without Deficiency
+      </p>
+    </div>
+  </div>
+</section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8 p-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">

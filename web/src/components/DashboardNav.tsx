@@ -7,44 +7,39 @@ export default function DashboardNav() {
   const pathname = usePathname();
 
   const tabs = [
-    { name: "Applications", href: "/dashboard" },
-    { name: "Verification Stages", href: "/dashboard/verification" },
-    { name: "Checking", href: "/dashboard/checking" },
+    { name: "Dashboard", href: "/dashboard" },
+    { name: "Applications", href: "/dashboard/applications" },
+    { name: "5 Stages", href: "/dashboard/verification" },
+    { name: "Visitings", href: "/dashboard/visitings" },
     { name: "Reports", href: "/dashboard/reports" },
+    { name: "Settings", href: "/dashboard/settings" },
   ];
 
   return (
-    <div className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="hidden sm:-my-px sm:ml-6 sm:flex sm:space-x-8">
-              {tabs.map((tab) => {
-                // Exact match for dashboard to avoid highlighting it on sub-routes
-                const isActive =
-                  tab.href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : pathname.startsWith(tab.href);
-                return (
-                  <Link
-                    key={tab.name}
-                    href={tab.href}
-                    className={`${
-                      isActive
-                        ? "border-blue-500 text-gray-900"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200`}
-                  >
-                    {tab.name}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-          
-          {/* Mobile menu could go here if needed later */}
-          <div className="flex items-center sm:hidden">
-            <span className="text-gray-500 font-medium">Dashboard Menu</span>
+    <div className="border-b border-gray-200 bg-white shadow-sm">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="overflow-x-auto">
+          <div className="flex h-16 min-w-max items-center gap-6">
+            {tabs.map((tab) => {
+              const isActive =
+                tab.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname.startsWith(tab.href);
+
+              return (
+                <Link
+                  key={tab.name}
+                  href={tab.href}
+                  className={`inline-flex h-16 items-center border-b-2 px-1 text-sm font-semibold transition-colors duration-200 ${
+                    isActive
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+                  }`}
+                >
+                  {tab.name}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>

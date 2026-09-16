@@ -2,15 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../models/resource_enums.dart';
 import '../../services/auth_service.dart';
 import '../../services/gpid_api_service.dart';
+import '../checking/checking_selection_screen.dart';
+import '../checking/gpid_based_checking_screen.dart';
+import '../checking/map_based_checking_screen.dart';
 import '../festivity/festivity_check_screen.dart';
 import '../installation/installation_check_screen.dart';
 import '../login/login_screen.dart';
 import '../pre_installation/pre_installation_screen.dart';
 import '../resources/resource_command_dashboard_screen.dart';
 import '../resources/resource_directory_screen.dart';
-import '../../models/resource_enums.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String officerName;
@@ -29,19 +32,13 @@ class DashboardScreen extends StatefulWidget {
   });
 
   @override
-  State<DashboardScreen> createState() =>
-      _DashboardScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState
-    extends State<DashboardScreen> {
-  final TextEditingController _searchController =
-      TextEditingController();
+class _DashboardScreenState extends State<DashboardScreen> {
+  final TextEditingController _searchController = TextEditingController();
 
-  
-
-  List<Map<String, dynamic>> _records =
-      <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _records = <Map<String, dynamic>>[];
 
   bool _loading = true;
   bool _refreshing = false;
@@ -60,17 +57,14 @@ class _DashboardScreenState
   static const String northRange = 'North Range';
 
   @override
-void initState() {
-  super.initState();
-
-  _loadRecords();
-}
+  void initState() {
+    super.initState();
+    _loadRecords();
+  }
 
   @override
   void dispose() {
-     
     _searchController.dispose();
-
     super.dispose();
   }
 
@@ -81,8 +75,7 @@ void initState() {
 
     final text = value.toString().trim();
 
-    if (text.isEmpty ||
-        text.toLowerCase() == 'null') {
+    if (text.isEmpty || text.toLowerCase() == 'null') {
       return '';
     }
 
@@ -91,60 +84,35 @@ void initState() {
 
   String _displayText(dynamic value) {
     final text = _text(value);
-
     return text.isEmpty ? '-' : text;
   }
 
-  String _normalizeAccessName(
-    dynamic value,
-  ) {
+  String _normalizeAccessName(dynamic value) {
     var text = _text(value)
         .toLowerCase()
-        .replaceAll(
-          RegExp(r'\s+'),
-          ' ',
-        )
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    text = text.replaceFirst(
-      RegExp(r'\s+ps$'),
-      '',
-    );
-
+    text = text.replaceFirst(RegExp(r'\s+ps$'), '');
     return text.trim();
   }
 
-  String _normalizeHierarchyName(
-    dynamic value,
-  ) {
+  String _normalizeHierarchyName(dynamic value) {
     return _text(value)
         .toLowerCase()
-        .replaceAll(
-          RegExp(r'\s+'),
-          ' ',
-        )
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
-  String _zoneKey(
-    dynamic value,
-  ) {
-    return _normalizeHierarchyName(
-      value,
-    ).replaceAll(
-      RegExp(r'[^a-z0-9]'),
-      '',
-    );
+  String _zoneKey(dynamic value) {
+    return _normalizeHierarchyName(value)
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
-  String? _rangeForZone(
-    dynamic zoneName,
-  ) {
-    final key =
-        _zoneKey(zoneName);
+  String? _rangeForZone(dynamic zoneName) {
+    final key = _zoneKey(zoneName);
 
-    const southZones =
-        <String>{
+    const southZones = <String>{
       'charminar',
       'golconda',
       'golkonda',
@@ -154,8 +122,7 @@ void initState() {
       'rajendanagar',
     };
 
-    const northZones =
-        <String>{
+    const northZones = <String>{
       'jubileehills',
       'khairatabad',
       'secunderabad',
@@ -175,7 +142,6 @@ void initState() {
       return southRange;
     }
 
-    // All zones that are not in South Range are grouped under North Range
     if (northZones.contains(key) || key.isNotEmpty) {
       return northRange;
     }
@@ -183,144 +149,90 @@ void initState() {
     return null;
   }
 
-  bool _sameAccessName(
-    dynamic left,
-    dynamic right,
-  ) {
-    final normalizedLeft =
-        _normalizeAccessName(left);
-
-    final normalizedRight =
-        _normalizeAccessName(right);
+  bool _sameAccessName(dynamic left, dynamic right) {
+    final normalizedLeft = _normalizeAccessName(left);
+    final normalizedRight = _normalizeAccessName(right);
 
     return normalizedLeft.isNotEmpty &&
-        normalizedLeft ==
-            normalizedRight;
+        normalizedLeft == normalizedRight;
   }
 
-  bool _canAccessRecord(
-    Map<String, dynamic> record,
-  ) {
-    final user =
-        widget.authenticatedUser;
+  bool _canAccessRecord(Map<String, dynamic> record) {
+    final user = widget.authenticatedUser;
 
-    if (user.isAdmin ||
-        user.allZones) {
+    if (user.isAdmin || user.allZones) {
       return true;
     }
 
     if (user.allPoliceStations) {
-      final zoneName =
-          user.zoneName?.trim() ?? '';
+      final zoneName = user.zoneName?.trim() ?? '';
 
       if (zoneName.isNotEmpty) {
-        return _sameAccessName(
-          record['zone_name'],
-          zoneName,
-        );
+        return _sameAccessName(record['zone_name'], zoneName);
       }
 
-      final divisionName =
-          user.divisionName?.trim() ??
-              '';
+      final divisionName = user.divisionName?.trim() ?? '';
 
       if (divisionName.isNotEmpty) {
-        return _sameAccessName(
-          record['division_name'],
-          divisionName,
-        );
+        return _sameAccessName(record['division_name'], divisionName);
       }
 
-      final policeStationName =
-          user.policeStationName
-                  ?.trim() ??
-              '';
+      final policeStationName = user.policeStationName?.trim() ?? '';
 
-      if (policeStationName
-          .isNotEmpty) {
-        return _sameAccessName(
-          record['ps_name'],
-          policeStationName,
-        );
+      if (policeStationName.isNotEmpty) {
+        return _sameAccessName(record['ps_name'], policeStationName);
       }
 
       return false;
     }
 
-    final allowedNames =
-        user.allowedPoliceStations
-            .where(
-              (access) =>
-                  access.canView,
-            )
-            .map(
-              (access) =>
-                  _normalizeAccessName(
-                access.policeStationName,
-              ),
-            )
-            .where(
-              (name) =>
-                  name.isNotEmpty,
-            )
-            .toSet();
+    final allowedNames = user.allowedPoliceStations
+        .where((access) => access.canView)
+        .map(
+          (access) => _normalizeAccessName(access.policeStationName),
+        )
+        .where((name) => name.isNotEmpty)
+        .toSet();
 
     if (allowedNames.isEmpty) {
       return false;
     }
 
     return allowedNames.contains(
-      _normalizeAccessName(
-        record['ps_name'],
-      ),
+      _normalizeAccessName(record['ps_name']),
     );
   }
 
-  List<Map<String, dynamic>>
-      _filterAuthorizedRecords(
-    List<Map<String, dynamic>>
-        records,
+  List<Map<String, dynamic>> _filterAuthorizedRecords(
+    List<Map<String, dynamic>> records,
   ) {
-    return records
-        .where(
-          _canAccessRecord,
-        )
-        .toList();
+    return records.where(_canAccessRecord).toList();
   }
 
   String get _accessScopeLabel {
-    final user =
-        widget.authenticatedUser;
+    final user = widget.authenticatedUser;
 
-    if (user.isAdmin ||
-        user.allZones) {
+    if (user.isAdmin || user.allZones) {
       return 'All Police Stations';
     }
 
     if (user.allPoliceStations) {
-      final zoneName =
-          user.zoneName?.trim() ?? '';
+      final zoneName = user.zoneName?.trim() ?? '';
 
       if (zoneName.isNotEmpty) {
         return '$zoneName Zone';
       }
 
-      final divisionName =
-          user.divisionName?.trim() ??
-              '';
+      final divisionName = user.divisionName?.trim() ?? '';
 
       if (divisionName.isNotEmpty) {
         return '$divisionName Division';
       }
     }
 
-    final count =
-        user.allowedPoliceStations
-            .where(
-              (access) =>
-                  access.canView,
-            )
-            .length;
+    final count = user.allowedPoliceStations
+        .where((access) => access.canView)
+        .length;
 
     if (count == 1) {
       return '1 Police Station';
@@ -337,53 +249,37 @@ void initState() {
         _loading = true;
         _errorMessage = null;
       });
-    } else {
-      if (mounted) {
-        setState(() {
-          _refreshing = true;
-        });
-      }
+    } else if (mounted) {
+      setState(() {
+        _refreshing = true;
+      });
     }
 
     try {
       final fetchedRecords =
-    await GpidApiService
-        .fetchGaneshRecords(
-      userId:
-          widget.authenticatedUser.id,
-    );
+          await GpidApiService.fetchGaneshRecords(
+        userId: widget.authenticatedUser.id,
+      );
 
-      final normalizedRecords =
-          fetchedRecords
-              .map<
-                  Map<String,
-                      dynamic>>(
-                (record) =>
-                    Map<String,
-                        dynamic>.from(
-                  record,
-                ),
-              )
-              .toList();
+      final normalizedRecords = fetchedRecords
+          .map<Map<String, dynamic>>(
+            (record) => Map<String, dynamic>.from(record),
+          )
+          .toList();
 
       if (!mounted) return;
 
       final authorizedRecords =
-          _filterAuthorizedRecords(
-        normalizedRecords,
-      );
+          _filterAuthorizedRecords(normalizedRecords);
 
       setState(() {
-        _records =
-            authorizedRecords;
-
+        _records = authorizedRecords;
         _loading = false;
         _refreshing = false;
         _errorMessage = null;
-
         _validateHierarchySelections();
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
@@ -391,8 +287,7 @@ void initState() {
         _refreshing = false;
 
         if (_records.isEmpty) {
-          _errorMessage =
-              'Unable to load live GPID records.';
+          _errorMessage = 'Unable to load live GPID records.';
         }
       });
     }
@@ -400,13 +295,9 @@ void initState() {
 
   void _validateHierarchySelections() {
     if (_selectedRange != null) {
-      final rangeExists =
-          _records.any(
+      final rangeExists = _records.any(
         (record) =>
-            _rangeForZone(
-              record['zone_name'],
-            ) ==
-            _selectedRange,
+            _rangeForZone(record['zone_name']) == _selectedRange,
       );
 
       if (!rangeExists) {
@@ -414,19 +305,13 @@ void initState() {
         _selectedZone = null;
         _selectedDivision = null;
         _selectedPoliceStation = null;
-
         return;
       }
     }
 
     if (_selectedZone != null) {
-      final zoneExists =
-          _records.any(
-        (record) =>
-            _text(
-              record['zone_name'],
-            ) ==
-            _selectedZone,
+      final zoneExists = _records.any(
+        (record) => _text(record['zone_name']) == _selectedZone,
       );
 
       if (!zoneExists) {
@@ -439,182 +324,107 @@ void initState() {
 
   List<String> _uniqueValues(
     String key, {
-    List<Map<String, dynamic>>?
-        source,
+    List<Map<String, dynamic>>? source,
   }) {
-    final records =
-        source ?? _records;
+    final records = source ?? _records;
 
     final values = records
-        .map(
-          (record) => _text(
-            record[key],
-          ),
-        )
-        .where(
-          (value) =>
-              value.isNotEmpty,
-        )
+        .map((record) => _text(record[key]))
+        .where((value) => value.isNotEmpty)
         .toSet()
         .toList();
 
     values.sort(
-      (a, b) =>
-          a.toLowerCase().compareTo(
-                b.toLowerCase(),
-              ),
+      (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
     );
 
     return values;
   }
 
-  List<Map<String, dynamic>>
-      _recordsForRange(
-    String range,
-  ) {
-    return _records.where(
-      (record) {
-        return _rangeForZone(
-              record['zone_name'],
-            ) ==
-            range;
-      },
-    ).toList();
+  List<Map<String, dynamic>> _recordsForRange(String range) {
+    return _records.where((record) {
+      return _rangeForZone(record['zone_name']) == range;
+    }).toList();
   }
 
-  List<Map<String, dynamic>> get
-      _searchResults {
-    final query =
-        _searchText
-            .trim()
-            .toLowerCase();
+  List<Map<String, dynamic>> get _searchResults {
+    final query = _searchText.trim().toLowerCase();
 
     if (query.isEmpty) {
-      return const <
-          Map<String, dynamic>>[];
+      return const <Map<String, dynamic>>[];
     }
 
-    return _records.where(
-      (record) {
-        final searchableValues = [
-          record['unique_id'],
-          record['ref_no'],
-          record['mobile_no'],
-          record['name'],
-          record['association'],
-          record['ps_name'],
-          record['division_name'],
-          record['zone_name'],
-          record['status'],
-        ];
+    return _records.where((record) {
+      final searchableValues = [
+        record['unique_id'],
+        record['ref_no'],
+        record['mobile_no'],
+        record['name'],
+        record['association'],
+        record['ps_name'],
+        record['division_name'],
+        record['zone_name'],
+        record['status'],
+      ];
 
-        return searchableValues
-            .any(
-          (value) => _text(
-            value,
-          )
-              .toLowerCase()
-              .contains(
-                query,
-              ),
-        );
-      },
-    ).take(100).toList();
+      return searchableValues.any(
+        (value) => _text(value).toLowerCase().contains(query),
+      );
+    }).take(100).toList();
   }
 
-  Color _statusColor(
-    dynamic value,
-  ) {
-    final status =
-        _text(value)
-            .toUpperCase();
+  Color _statusColor(dynamic value) {
+    final status = _text(value).toUpperCase();
 
-    if (status ==
-        'APPROVED') {
-      return Colors
-          .green.shade700;
+    if (status == 'APPROVED') {
+      return Colors.green.shade700;
     }
 
-    if (status ==
-        'REJECTED') {
+    if (status == 'REJECTED') {
       return Colors.red.shade700;
     }
 
-    if (status ==
-        'PENDING') {
-      return Colors
-          .orange.shade800;
+    if (status == 'PENDING') {
+      return Colors.orange.shade800;
     }
 
-    return const Color(
-      0xFF475569,
-    );
+    return const Color(0xFF475569);
   }
 
-  Color _statusBackground(
-    dynamic value,
-  ) {
-    final status =
-        _text(value)
-            .toUpperCase();
+  Color _statusBackground(dynamic value) {
+    final status = _text(value).toUpperCase();
 
-    if (status ==
-        'APPROVED') {
-      return const Color(
-        0xFFF0FDF4,
-      );
+    if (status == 'APPROVED') {
+      return const Color(0xFFF0FDF4);
     }
 
-    if (status ==
-        'REJECTED') {
-      return const Color(
-        0xFFFEF2F2,
-      );
+    if (status == 'REJECTED') {
+      return const Color(0xFFFEF2F2);
     }
 
-    if (status ==
-        'PENDING') {
-      return const Color(
-        0xFFFFFBEB,
-      );
+    if (status == 'PENDING') {
+      return const Color(0xFFFFFBEB);
     }
 
-    return const Color(
-      0xFFF8FAFC,
-    );
+    return const Color(0xFFF8FAFC);
   }
 
-  Color _statusBorder(
-    dynamic value,
-  ) {
-    final status =
-        _text(value)
-            .toUpperCase();
+  Color _statusBorder(dynamic value) {
+    final status = _text(value).toUpperCase();
 
-    if (status ==
-        'APPROVED') {
-      return const Color(
-        0xFFBBF7D0,
-      );
+    if (status == 'APPROVED') {
+      return const Color(0xFFBBF7D0);
     }
 
-    if (status ==
-        'REJECTED') {
-      return const Color(
-        0xFFFECACA,
-      );
+    if (status == 'REJECTED') {
+      return const Color(0xFFFECACA);
     }
 
-    if (status ==
-        'PENDING') {
-      return const Color(
-        0xFFFDE68A,
-      );
+    if (status == 'PENDING') {
+      return const Color(0xFFFDE68A);
     }
 
-    return const Color(
-      0xFFE2E8F0,
-    );
+    return const Color(0xFFE2E8F0);
   }
 
   void _clearHierarchy() {
@@ -626,9 +436,7 @@ void initState() {
     });
   }
 
-  void _selectRange(
-    String range,
-  ) {
+  void _selectRange(String range) {
     setState(() {
       _selectedRange = range;
       _selectedZone = null;
@@ -637,9 +445,7 @@ void initState() {
     });
   }
 
-  void _selectZone(
-    String zone,
-  ) {
+  void _selectZone(String zone) {
     setState(() {
       _selectedZone = zone;
       _selectedDivision = null;
@@ -647,51 +453,34 @@ void initState() {
     });
   }
 
-  void _selectDivision(
-    String division,
-  ) {
+  void _selectDivision(String division) {
     setState(() {
       _selectedDivision = division;
       _selectedPoliceStation = null;
     });
   }
 
-  void _selectPoliceStation(
-    String policeStation,
-  ) {
+  void _selectPoliceStation(String policeStation) {
     setState(() {
-      _selectedPoliceStation =
-          policeStation;
+      _selectedPoliceStation = policeStation;
     });
   }
 
-  Future<void> _openGpid(
-    Map<String, dynamic> record,
-  ) async {
-    if (!_canAccessRecord(
-      record,
-    )) {
-      if (!mounted) {
-        return;
-      }
+  Future<void> _openGpid(Map<String, dynamic> record) async {
+    if (!_canAccessRecord(record)) {
+      if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
             'You do not have access to this Police Station.',
           ),
         ),
       );
-
       return;
     }
 
-    final gpid =
-        _text(
-      record['unique_id'],
-    );
+    final gpid = _text(record['unique_id']);
 
     if (gpid.isEmpty) {
       return;
@@ -699,7 +488,7 @@ void initState() {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => _activeStage == 3
             ? FestivityCheckScreen(
                 applicationId: gpid,
@@ -717,6 +506,45 @@ void initState() {
     );
   }
 
+  void _openCheckingSelection() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => CheckingSelectionScreen(
+          officerName: widget.officerName,
+          role: widget.role,
+          scopeLabel: _accessScopeLabel,
+         onGpidBasedChecking: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => GpidBasedCheckingScreen(
+                  authenticatedUser: widget.authenticatedUser,
+                  records: List<Map<String, dynamic>>.from(
+                    _records,
+                  ),
+                ),
+              ),
+            );
+          },
+          onMapBasedChecking: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => MapBasedCheckingScreen(
+                  authorizedRecords:
+                      List<Map<String, dynamic>>.from(
+                    _records,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _summaryCard({
     required String title,
     required String value,
@@ -724,84 +552,47 @@ void initState() {
   }) {
     return Expanded(
       child: Container(
-        padding:
-            const EdgeInsets.all(
-          14,
-        ),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color:
-                const Color(
-              0xFFE2E8F0,
-            ),
+            color: const Color(0xFFE2E8F0),
           ),
           boxShadow: const [
             BoxShadow(
-              color:
-                  Color(
-                0x08000000,
-              ),
+              color: Color(0x08000000),
               blurRadius: 5,
-              offset:
-                  Offset(
-                0,
-                2,
-              ),
+              offset: Offset(0, 2),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               icon,
-              color:
-                  const Color(
-                0xFF17365D,
-              ),
+              color: const Color(0xFF17365D),
               size: 22,
             ),
-            const SizedBox(
-              height: 10,
-            ),
+            const SizedBox(height: 10),
             Text(
               value,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 fontSize: 23,
-                fontWeight:
-                    FontWeight.bold,
-                color:
-                    Color(
-                  0xFF0F172A,
-                ),
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
               ),
             ),
-            const SizedBox(
-              height: 3,
-            ),
+            const SizedBox(height: 3),
             Text(
               title,
               maxLines: 1,
-              overflow:
-                  TextOverflow
-                      .ellipsis,
-              style:
-                  const TextStyle(
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 fontSize: 11,
-                color:
-                    Color(
-                  0xFF64748B,
-                ),
-                fontWeight:
-                    FontWeight.w600,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -810,219 +601,120 @@ void initState() {
     );
   }
 
-  Widget _statusChip(
-    dynamic value,
-  ) {
-    final status =
-        _displayText(
-      value,
-    ).toUpperCase();
+  Widget _statusChip(dynamic value) {
+    final status = _displayText(value).toUpperCase();
 
     return Container(
-      padding:
-          const EdgeInsets
-              .symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 8,
         vertical: 4,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            _statusBackground(
-          value,
-        ),
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
+      decoration: BoxDecoration(
+        color: _statusBackground(value),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color:
-              _statusBorder(
-            value,
-          ),
+          color: _statusBorder(value),
         ),
       ),
       child: Text(
         status,
         style: TextStyle(
           fontSize: 9,
-          fontWeight:
-              FontWeight.bold,
-          color:
-              _statusColor(
-            value,
-          ),
+          fontWeight: FontWeight.bold,
+          color: _statusColor(value),
         ),
       ),
     );
   }
 
-  Widget _gpidRecordTile(
-    Map<String, dynamic> record,
-  ) {
+  Widget _gpidRecordTile(Map<String, dynamic> record) {
     return Container(
-      margin:
-          const EdgeInsets.only(
-        bottom: 8,
-      ),
-      decoration:
-          BoxDecoration(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color:
-              const Color(
-            0xFFE2E8F0,
-          ),
+          color: const Color(0xFFE2E8F0),
         ),
       ),
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+        borderRadius: BorderRadius.circular(12),
         onTap: () {
-          _openGpid(
-            record,
-          );
+          _openGpid(record);
         },
         child: Padding(
-          padding:
-              const EdgeInsets.all(
-            12,
-          ),
+          padding: const EdgeInsets.all(12),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
-                      _displayText(
-                        record[
-                            'unique_id'],
-                      ),
-                      style:
-                          const TextStyle(
+                      _displayText(record['unique_id']),
+                      style: const TextStyle(
                         fontSize: 14,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            Color(
-                          0xFF17365D,
-                        ),
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF17365D),
                       ),
                     ),
                   ),
-                  const SizedBox(
-                    width: 8,
-                  ),
-                  _statusChip(
-                    record['status'],
-                  ),
+                  const SizedBox(width: 8),
+                  _statusChip(record['status']),
                 ],
               ),
-              const SizedBox(
-                height: 7,
-              ),
+              const SizedBox(height: 7),
               Text(
-                _displayText(
-                  record['name'],
-                ),
-                style:
-                    const TextStyle(
+                _displayText(record['name']),
+                style: const TextStyle(
                   fontSize: 14,
-                  fontWeight:
-                      FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(
-                height: 4,
-              ),
+              const SizedBox(height: 4),
               Text(
                 'Ref: ${_displayText(record['ref_no'])}',
-                style:
-                    const TextStyle(
+                style: const TextStyle(
                   fontSize: 11,
-                  color:
-                      Color(
-                    0xFF64748B,
-                  ),
+                  color: Color(0xFF64748B),
                 ),
               ),
               Text(
                 'Mobile: ${_displayText(record['mobile_no'])}',
-                style:
-                    const TextStyle(
+                style: const TextStyle(
                   fontSize: 11,
-                  color:
-                      Color(
-                    0xFF64748B,
-                  ),
+                  color: Color(0xFF64748B),
                 ),
               ),
               Text(
-                _displayText(
-                  record[
-                      'association'],
-                ),
-                style:
-                    const TextStyle(
+                _displayText(record['association']),
+                style: const TextStyle(
                   fontSize: 11,
-                  color:
-                      Color(
-                    0xFF64748B,
-                  ),
+                  color: Color(0xFF64748B),
                 ),
               ),
-              const SizedBox(
-                height: 6,
-              ),
+              const SizedBox(height: 6),
               Row(
                 children: [
                   const Icon(
-                    Icons
-                        .local_police_outlined,
+                    Icons.local_police_outlined,
                     size: 14,
-                    color:
-                        Color(
-                      0xFF64748B,
-                    ),
+                    color: Color(0xFF64748B),
                   ),
-                  const SizedBox(
-                    width: 5,
-                  ),
+                  const SizedBox(width: 5),
                   Expanded(
                     child: Text(
-                      _displayText(
-                        record[
-                            'ps_name'],
-                      ),
-                      style:
-                          const TextStyle(
+                      _displayText(record['ps_name']),
+                      style: const TextStyle(
                         fontSize: 11,
-                        color:
-                            Color(
-                          0xFF475569,
-                        ),
+                        color: Color(0xFF475569),
                       ),
                     ),
                   ),
                   const Icon(
-                    Icons
-                        .chevron_right,
-                    color:
-                        Color(
-                      0xFF94A3B8,
-                    ),
+                    Icons.chevron_right,
+                    color: Color(0xFF94A3B8),
                   ),
                 ],
               ),
@@ -1034,443 +726,252 @@ void initState() {
   }
 
   Widget _searchSection() {
-    final results =
-        _searchResults;
+    final results = _searchResults;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Search GPID Records',
           style: TextStyle(
             fontSize: 19,
-            fontWeight:
-                FontWeight.bold,
-            color:
-                Color(
-              0xFF0F172A,
-            ),
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
           ),
         ),
-        const SizedBox(
-          height: 8,
-        ),
+        const SizedBox(height: 8),
         TextField(
-          controller:
-              _searchController,
+          controller: _searchController,
           onChanged: (value) {
             setState(() {
-              _searchText =
-                  value;
+              _searchText = value;
             });
           },
-          decoration:
-              InputDecoration(
-            hintText:
-                'GPID, Ref ID, Mobile, Applicant...',
-            prefixIcon:
-                const Icon(
-              Icons.search,
-            ),
-            suffixIcon:
-                _searchText.isEmpty
-                    ? null
-                    : IconButton(
-                        icon:
-                            const Icon(
-                          Icons.close,
-                        ),
-                        onPressed:
-                            () {
-                          _searchController
-                              .clear();
-
-                          setState(
-                            () {
-                              _searchText =
-                                  '';
-                            },
-                          );
-                        },
-                      ),
+          decoration: InputDecoration(
+            hintText: 'GPID, Ref ID, Mobile, Applicant...',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchText.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchText = '';
+                      });
+                    },
+                  ),
             filled: true,
-            fillColor:
-                Colors.white,
-            contentPadding:
-                const EdgeInsets
-                    .symmetric(
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 12,
             ),
-            border:
-                OutlineInputBorder(
-              borderRadius:
-                  BorderRadius
-                      .circular(
-                12,
-              ),
-              borderSide:
-                  const BorderSide(
-                color:
-                    Color(
-                  0xFFE2E8F0,
-                ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFE2E8F0),
               ),
             ),
-            enabledBorder:
-                OutlineInputBorder(
-              borderRadius:
-                  BorderRadius
-                      .circular(
-                12,
-              ),
-              borderSide:
-                  const BorderSide(
-                color:
-                    Color(
-                  0xFFE2E8F0,
-                ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFE2E8F0),
               ),
             ),
           ),
         ),
-        if (_searchText
-            .trim()
-            .isNotEmpty) ...[
-          const SizedBox(
-            height: 10,
-          ),
+        if (_searchText.trim().isNotEmpty) ...[
+          const SizedBox(height: 10),
           Text(
             '${results.length} result${results.length == 1 ? '' : 's'}',
-            style:
-                const TextStyle(
+            style: const TextStyle(
               fontSize: 12,
-              color:
-                  Color(
-                0xFF64748B,
-              ),
-              fontWeight:
-                  FontWeight.w600,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(
-            height: 8,
-          ),
+          const SizedBox(height: 8),
           if (results.isEmpty)
             Container(
-              width:
-                  double.infinity,
-              padding:
-                  const EdgeInsets
-                      .all(
-                18,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white,
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  12,
-                ),
-                border:
-                    Border.all(
-                  color:
-                      const Color(
-                    0xFFE2E8F0,
-                  ),
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFE2E8F0),
                 ),
               ),
-              child:
-                  const Text(
+              child: const Text(
                 'No matching GPID records found.',
-                textAlign:
-                    TextAlign.center,
-                style:
-                    TextStyle(
-                  color:
-                      Color(
-                    0xFF64748B,
-                  ),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFF64748B),
                 ),
               ),
             )
           else
-            ...results.map(
-              _gpidRecordTile,
-            ),
+            ...results.map(_gpidRecordTile),
         ],
       ],
     );
   }
 
   Widget _hierarchySection() {
-    if (_selectedRange ==
-        null) {
-      final ranges =
-          <String>[];
+    if (_selectedRange == null) {
+      final ranges = <String>[];
 
-      final southCount =
-          _recordsForRange(
-        southRange,
-      ).length;
-
-      final northCount =
-          _recordsForRange(
-        northRange,
-      ).length;
+      final southCount = _recordsForRange(southRange).length;
+      final northCount = _recordsForRange(northRange).length;
 
       if (southCount > 0) {
-        ranges.add(
-          southRange,
-        );
+        ranges.add(southRange);
       }
 
       if (northCount > 0) {
-        ranges.add(
-          northRange,
-        );
+        ranges.add(northRange);
       }
 
       return _hierarchyList(
-        title:
-            'Hyderabad Commissionerate',
-        subtitle:
-            'Select a Range to view Zones',
+        title: 'Hyderabad Commissionerate',
+        subtitle: 'Select a Range to view Zones',
         items: ranges,
-        recordCount:
-            (range) {
-          return _recordsForRange(
-            range,
-          ).length;
+        recordCount: (range) {
+          return _recordsForRange(range).length;
         },
         onTap: _selectRange,
-        icon:
-            Icons.account_balance_outlined,
+        icon: Icons.account_balance_outlined,
       );
     }
 
-    final rangeRecords =
-        _recordsForRange(
-      _selectedRange!,
-    );
+    final rangeRecords = _recordsForRange(_selectedRange!);
 
-    if (_selectedZone ==
-        null) {
-      final zones =
-          _uniqueValues(
+    if (_selectedZone == null) {
+      final zones = _uniqueValues(
         'zone_name',
-        source:
-            rangeRecords,
+        source: rangeRecords,
       );
 
       return _hierarchyList(
-        title:
-            _selectedRange!,
-        subtitle:
-            'Select a Zone',
+        title: _selectedRange!,
+        subtitle: 'Select a Zone',
         items: zones,
-        recordCount:
-            (zone) {
+        recordCount: (zone) {
           return rangeRecords.where(
-            (record) =>
-                _text(
-                  record[
-                      'zone_name'],
-                ) ==
-                zone,
+            (record) => _text(record['zone_name']) == zone,
           ).length;
         },
-        onBack:
-            _clearHierarchy,
-        onTap:
-            _selectZone,
-        icon:
-            Icons.location_city,
+        onBack: _clearHierarchy,
+        onTap: _selectZone,
+        icon: Icons.location_city,
       );
     }
 
-    final zoneRecords =
-        rangeRecords.where(
-      (record) =>
-          _text(
-            record['zone_name'],
-          ) ==
-          _selectedZone,
+    final zoneRecords = rangeRecords.where(
+      (record) => _text(record['zone_name']) == _selectedZone,
     ).toList();
 
-    if (_selectedDivision ==
-        null) {
-      final divisions =
-          _uniqueValues(
+    if (_selectedDivision == null) {
+      final divisions = _uniqueValues(
         'division_name',
-        source:
-            zoneRecords,
+        source: zoneRecords,
       );
 
       return _hierarchyList(
-        title:
-            _selectedZone!,
-        subtitle:
-            'Select a Division',
+        title: _selectedZone!,
+        subtitle: 'Select a Division',
         items: divisions,
-        recordCount:
-            (division) {
+        recordCount: (division) {
           return zoneRecords.where(
-            (record) =>
-                _text(
-                  record[
-                      'division_name'],
-                ) ==
-                division,
+            (record) => _text(record['division_name']) == division,
           ).length;
         },
         onBack: () {
           setState(() {
-            _selectedZone =
-                null;
-            _selectedDivision =
-                null;
-            _selectedPoliceStation =
-                null;
+            _selectedZone = null;
+            _selectedDivision = null;
+            _selectedPoliceStation = null;
           });
         },
-        onTap:
-            _selectDivision,
-        icon:
-            Icons.account_tree_outlined,
+        onTap: _selectDivision,
+        icon: Icons.account_tree_outlined,
       );
     }
 
-    final divisionRecords =
-        zoneRecords.where(
-      (record) =>
-          _text(
-            record[
-                'division_name'],
-          ) ==
-          _selectedDivision,
+    final divisionRecords = zoneRecords.where(
+      (record) => _text(record['division_name']) == _selectedDivision,
     ).toList();
 
-    if (_selectedPoliceStation ==
-        null) {
-      final policeStations =
-          _uniqueValues(
+    if (_selectedPoliceStation == null) {
+      final policeStations = _uniqueValues(
         'ps_name',
-        source:
-            divisionRecords,
+        source: divisionRecords,
       );
 
       return _hierarchyList(
-        title:
-            _selectedDivision!,
-        subtitle:
-            'Select a Police Station',
-        items:
-            policeStations,
-        recordCount:
-            (policeStation) {
-          return divisionRecords
-              .where(
-                (record) =>
-                    _text(
-                      record[
-                          'ps_name'],
-                    ) ==
-                    policeStation,
-              )
-              .length;
+        title: _selectedDivision!,
+        subtitle: 'Select a Police Station',
+        items: policeStations,
+        recordCount: (policeStation) {
+          return divisionRecords.where(
+            (record) => _text(record['ps_name']) == policeStation,
+          ).length;
         },
         onBack: () {
           setState(() {
-            _selectedDivision =
-                null;
-            _selectedPoliceStation =
-                null;
+            _selectedDivision = null;
+            _selectedPoliceStation = null;
           });
         },
-        onTap:
-            _selectPoliceStation,
-        icon:
-            Icons.local_police,
+        onTap: _selectPoliceStation,
+        icon: Icons.local_police,
       );
     }
 
-    final stationRecords =
-        divisionRecords.where(
-      (record) =>
-          _text(
-            record['ps_name'],
-          ) ==
-          _selectedPoliceStation,
+    final stationRecords = divisionRecords.where(
+      (record) => _text(record['ps_name']) == _selectedPoliceStation,
     ).toList();
 
     stationRecords.sort(
-      (a, b) =>
-          _text(
-            a['unique_id'],
-          ).compareTo(
-        _text(
-          b['unique_id'],
-        ),
+      (a, b) => _text(a['unique_id']).compareTo(
+        _text(b['unique_id']),
       ),
     );
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             IconButton(
               onPressed: () {
                 setState(() {
-                  _selectedPoliceStation =
-                      null;
+                  _selectedPoliceStation = null;
                 });
               },
-              icon:
-                  const Icon(
-                Icons.arrow_back,
-              ),
-              padding:
-                  EdgeInsets.zero,
-              constraints:
-                  const BoxConstraints(),
+              icon: const Icon(Icons.arrow_back),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-            const SizedBox(
-              width: 10,
-            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     _selectedPoliceStation!,
-                    style:
-                        const TextStyle(
+                    style: const TextStyle(
                       fontSize: 19,
-                      fontWeight:
-                          FontWeight.bold,
-                      color:
-                          Color(
-                        0xFF0F172A,
-                      ),
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
                     ),
                   ),
                   Text(
                     '${stationRecords.length} GPID records',
-                    style:
-                        const TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color:
-                          Color(
-                        0xFF64748B,
-                      ),
+                      color: Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -1478,12 +979,8 @@ void initState() {
             ),
           ],
         ),
-        const SizedBox(
-          height: 10,
-        ),
-        ...stationRecords.map(
-          _gpidRecordTile,
-        ),
+        const SizedBox(height: 10),
+        ...stationRecords.map(_gpidRecordTile),
       ],
     );
   }
@@ -1492,66 +989,42 @@ void initState() {
     required String title,
     required String subtitle,
     required List<String> items,
-    required int Function(
-      String item,
-    ) recordCount,
-    required void Function(
-      String item,
-    ) onTap,
+    required int Function(String item) recordCount,
+    required void Function(String item) onTap,
     required IconData icon,
     VoidCallback? onBack,
   }) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             if (onBack != null) ...[
               IconButton(
-                onPressed:
-                    onBack,
-                icon:
-                    const Icon(
-                  Icons.arrow_back,
-                ),
-                padding:
-                    EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(),
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-              const SizedBox(
-                width: 10,
-              ),
+              const SizedBox(width: 10),
             ],
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style:
-                        const TextStyle(
+                    style: const TextStyle(
                       fontSize: 19,
-                      fontWeight:
-                          FontWeight.bold,
-                      color:
-                          Color(
-                        0xFF0F172A,
-                      ),
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
                     ),
                   ),
                   Text(
                     subtitle,
-                    style:
-                        const TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color:
-                          Color(
-                        0xFF64748B,
-                      ),
+                      color: Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -1559,116 +1032,57 @@ void initState() {
             ),
           ],
         ),
-        const SizedBox(
-          height: 10,
-        ),
+        const SizedBox(height: 10),
         if (items.isEmpty)
           Container(
-            width:
-                double.infinity,
-            padding:
-                const EdgeInsets
-                    .all(
-              18,
-            ),
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.white,
-              borderRadius:
-                  BorderRadius
-                      .circular(
-                12,
-              ),
-              border:
-                  Border.all(
-                color:
-                    const Color(
-                  0xFFE2E8F0,
-                ),
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE2E8F0),
               ),
             ),
-            child:
-                const Text(
+            child: const Text(
               'No records available.',
-              textAlign:
-                  TextAlign.center,
-              style:
-                  TextStyle(
-                color:
-                    Color(
-                  0xFF64748B,
-                ),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF64748B),
               ),
             ),
           )
         else
           ...items.map(
-            (item) =>
-                Container(
-              margin:
-                  const EdgeInsets
-                      .only(
-                bottom: 8,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white,
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  12,
-                ),
-                border:
-                    Border.all(
-                  color:
-                      const Color(
-                    0xFFE2E8F0,
-                  ),
+            (item) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFE2E8F0),
                 ),
               ),
-              child:
-                  ListTile(
-                leading:
-                    CircleAvatar(
-                  backgroundColor:
-                      const Color(
-                    0xFFEFF6FF,
-                  ),
-                  child:
-                      Icon(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  child: Icon(
                     icon,
                     size: 20,
-                    color:
-                        const Color(
-                      0xFF17365D,
-                    ),
+                    color: const Color(0xFF17365D),
                   ),
                 ),
-                title:
-                    Text(
+                title: Text(
                   item,
-                  style:
-                      const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
                 ),
-                subtitle:
-                    Text(
-                  '${recordCount(item)} GPIDs',
-                ),
-                trailing:
-                    const Icon(
-                  Icons
-                      .chevron_right,
-                ),
+                subtitle: Text('${recordCount(item)} GPIDs'),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  onTap(
-                    item,
-                  );
+                  onTap(item);
                 },
               ),
             ),
@@ -1678,311 +1092,153 @@ void initState() {
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final zones =
-        _uniqueValues(
-      'zone_name',
-    ).length;
-
-    final divisions =
-        _uniqueValues(
-      'division_name',
-    ).length;
-
-    final policeStations =
-        _uniqueValues(
-      'ps_name',
-    ).length;
+  Widget build(BuildContext context) {
+    final zones = _uniqueValues('zone_name').length;
+    final divisions = _uniqueValues('division_name').length;
+    final policeStations = _uniqueValues('ps_name').length;
 
     return Scaffold(
-      backgroundColor:
-          const Color(
-        0xFFF1F5F9,
-      ),
-      appBar:
-          AppBar(
-        backgroundColor:
-            const Color(
-          0xFF17365D,
-        ),
-        foregroundColor:
-            Colors.white,
-        title:
-            const Text(
+      backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF17365D),
+        foregroundColor: Colors.white,
+        title: const Text(
           'Ganesh Bandobust 2026',
-          style:
-              TextStyle(
-            fontWeight:
-                FontWeight.bold,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           if (_refreshing)
             const Padding(
-              padding:
-                  EdgeInsets
-                      .symmetric(
-                horizontal:
-                    12,
-              ),
-              child:
-                  Center(
-                child:
-                    SizedBox(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Center(
+                child: SizedBox(
                   width: 17,
                   height: 17,
-                  child:
-                      CircularProgressIndicator(
-                    strokeWidth:
-                        2,
-                    color:
-                        Colors.white,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
                   ),
                 ),
               ),
             )
           else
             IconButton(
-              tooltip:
-                  'Refresh',
-              icon:
-                  const Icon(
-                Icons.refresh,
-              ),
-              onPressed:
-                  () {
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
                 _loadRecords();
               },
             ),
           IconButton(
-            tooltip:
-                'Logout',
-            icon:
-                const Icon(
-              Icons.logout,
-            ),
-            onPressed:
-                () {
-              AuthService
-                  .clearSession();
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              AuthService.clearSession();
 
-              Navigator
-                  .pushReplacement(
+              Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder:
-                      (_) =>
-                          const LoginScreen(),
+                MaterialPageRoute<void>(
+                  builder: (_) => const LoginScreen(),
                 ),
               );
             },
           ),
         ],
       ),
-      body:
-          RefreshIndicator(
-        onRefresh:
-            () =>
-                _loadRecords(),
-        child:
-            SingleChildScrollView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
-          padding:
-              const EdgeInsets
-                  .all(
-            14,
-          ),
-          child:
-              Column(
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+      body: RefreshIndicator(
+        onRefresh: () => _loadRecords(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width:
-                    double.infinity,
-                padding:
-                    const EdgeInsets
-                        .all(
-                  16,
-                ),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.white,
-                  borderRadius:
-                      BorderRadius
-                          .circular(
-                    14,
-                  ),
-                  border:
-                      Border.all(
-                    color:
-                        const Color(
-                      0xFFE2E8F0,
-                    ),
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
                   ),
                 ),
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'Logged-in Officer',
-                      style:
-                          TextStyle(
-                        fontSize:
-                            11,
-                        color:
-                            Color(
-                          0xFF64748B,
-                        ),
-                        fontWeight:
-                            FontWeight
-                                .w600,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(
-                      height: 5,
-                    ),
+                    const SizedBox(height: 5),
                     Text(
-                      widget
-                          .officerName,
-                      style:
-                          const TextStyle(
-                        fontSize:
-                            20,
-                        fontWeight:
-                            FontWeight
-                                .bold,
-                        color:
-                            Color(
-                          0xFF17365D,
-                        ),
+                      widget.officerName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF17365D),
                       ),
                     ),
-                    const SizedBox(
-                      height: 8,
-                    ),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 5,
                       children: [
-                        _officerChip(
-                          widget
-                              .role,
-                        ),
-                        _officerChip(
-                          _accessScopeLabel,
-                        ),
-                        if (widget
-                            .policeStation
-                            .trim()
-                            .isNotEmpty)
-                          _officerChip(
-                            widget
-                                .policeStation,
-                          ),
-                        if (widget
-                            .sector
-                            .trim()
-                            .isNotEmpty)
-                          _officerChip(
-                            'Sector ${widget.sector}',
-                          ),
+                        _officerChip(widget.role),
+                        _officerChip(_accessScopeLabel),
+                        if (widget.policeStation.trim().isNotEmpty)
+                          _officerChip(widget.policeStation),
+                        if (widget.sector.trim().isNotEmpty)
+                          _officerChip('Sector ${widget.sector}'),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(
-                height: 16,
-              ),
-              if (_loading &&
-                  _records.isEmpty)
+              const SizedBox(height: 16),
+              if (_loading && _records.isEmpty)
                 const Center(
-                  child:
-                      Padding(
-                    padding:
-                        EdgeInsets
-                            .all(
-                      35,
-                    ),
-                    child:
-                        CircularProgressIndicator(),
+                  child: Padding(
+                    padding: EdgeInsets.all(35),
+                    child: CircularProgressIndicator(),
                   ),
                 )
-              else if (_errorMessage !=
-                      null &&
-                  _records.isEmpty)
+              else if (_errorMessage != null && _records.isEmpty)
                 Container(
-                  width:
-                      double.infinity,
-                  padding:
-                      const EdgeInsets
-                          .all(
-                    18,
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        const Color(
-                      0xFFFEF2F2,
-                    ),
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                      12,
-                    ),
-                    border:
-                        Border.all(
-                      color:
-                          const Color(
-                        0xFFFECACA,
-                      ),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFECACA),
                     ),
                   ),
-                  child:
-                      Column(
+                  child: Column(
                     children: [
                       const Icon(
-                        Icons
-                            .cloud_off_outlined,
+                        Icons.cloud_off_outlined,
                         size: 34,
-                        color:
-                            Colors.red,
+                        color: Colors.red,
                       ),
-                      const SizedBox(
-                        height: 8,
-                      ),
+                      const SizedBox(height: 8),
                       Text(
                         _errorMessage!,
-                        textAlign:
-                            TextAlign
-                                .center,
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(
-                        height: 10,
-                      ),
-                      OutlinedButton
-                          .icon(
-                        onPressed:
-                            () {
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () {
                           _loadRecords();
                         },
-                        icon:
-                            const Icon(
-                          Icons.refresh,
-                        ),
-                        label:
-                            const Text(
-                          'Retry',
-                        ),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
                       ),
                     ],
                   ),
@@ -1990,281 +1246,222 @@ void initState() {
               else ...[
                 const Text(
                   'Live GPID Overview',
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
-                    fontWeight:
-                        FontWeight
-                            .bold,
-                    color:
-                        Color(
-                      0xFF0F172A,
-                    ),
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(
-                  height: 10,
-                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     _summaryCard(
-                      title:
-                          'Total GPIDs',
-                      value:
-                          _records
-                              .length
-                              .toString(),
-                      icon:
-                          Icons
-                              .temple_hindu,
+                      title: 'Total GPIDs',
+                      value: _records.length.toString(),
+                      icon: Icons.temple_hindu,
                     ),
-                    const SizedBox(
-                      width: 8,
-                    ),
+                    const SizedBox(width: 8),
                     _summaryCard(
-                      title:
-                          'Zones',
-                      value:
-                          zones
-                              .toString(),
-                      icon:
-                          Icons
-                              .location_city,
+                      title: 'Zones',
+                      value: zones.toString(),
+                      icon: Icons.location_city,
                     ),
                   ],
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     _summaryCard(
-                      title:
-                          'Divisions',
-                      value:
-                          divisions
-                              .toString(),
-                      icon:
-                          Icons
-                              .account_tree_outlined,
+                      title: 'Divisions',
+                      value: divisions.toString(),
+                      icon: Icons.account_tree_outlined,
                     ),
-                    const SizedBox(
-                      width: 8,
-                    ),
+                    const SizedBox(width: 8),
                     _summaryCard(
-                      title:
-                          'Police Stations',
-                      value:
-                          policeStations
-                              .toString(),
-                      icon:
-                          Icons
-                              .local_police,
+                      title: 'Police Stations',
+                      value: policeStations.toString(),
+                      icon: Icons.local_police,
                     ),
                   ],
                 ),
-                const SizedBox(
-                  height: 20,
-                ),
+                const SizedBox(height: 20),
                 _searchSection(),
-                const SizedBox(
-                  height: 22,
-                ),
+                const SizedBox(height: 22),
                 _hierarchySection(),
-                const SizedBox(
-                  height: 22,
-                ),
+                const SizedBox(height: 22),
               ],
               const Text(
                 'My Work',
-                style:
-                    TextStyle(
+                style: TextStyle(
                   fontSize: 20,
-                  fontWeight:
-                      FontWeight.bold,
-                  color:
-                      Color(
-                    0xFF0F172A,
-                  ),
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(
-                height: 10,
-              ),
-              Card(
-                elevation: 0,
-                color:
-                    Colors.white,
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius
-                          .circular(
-                    12,
-                  ),
-                  side:
-                      const BorderSide(
-                    color:
-                        Color(
-                      0xFFE2E8F0,
-                    ),
-                  ),
-                ),
-                child:
-                    ListTile(
-                  contentPadding:
-                      const EdgeInsets
-                          .symmetric(
-                    horizontal:
-                        14,
-                    vertical: 8,
-                  ),
-                  leading:
-                      const CircleAvatar(
-                    backgroundColor:
-                        Color(
-                      0xFF17365D,
-                    ),
-                    child:
-                        Icon(
-                      Icons
-                          .temple_hindu,
-                      color:
-                          Colors.white,
-                    ),
-                  ),
-                  title:
-                      const Text(
-                    'GPID Ganesh Idols',
-                    style:
-                        TextStyle(
-                      fontWeight:
-                          FontWeight
-                              .bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  subtitle:
-                      const Text(
-                    'View complete GPID list',
-                  ),
-                  trailing:
-                      Row(
-                    mainAxisSize:
-                        MainAxisSize
-                            .min,
-                    children: [
-                      Container(
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal:
-                              9,
-                          vertical:
-                              4,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xFFEFF6FF,
-                          ),
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            20,
-                          ),
-                        ),
-                        child:
-                            Text(
-                          _records
-                              .length
-                              .toString(),
-                          style:
-                              const TextStyle(
-                            color:
-                                Color(
-                              0xFF17365D,
-                            ),
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons
-                            .chevron_right,
-                      ),
-                    ],
-                  ),
-                  onTap:
-                      () async {
-                    await Navigator
-                        .push(
-                      context,
-                      MaterialPageRoute<
-                          void>(
-                        builder:
-                            (_) =>
-                                _ScopedGpidListScreen(
-                          records:
-                              List<
-                                  Map<String,
-                                      dynamic>>.from(
-                            _records,
-                          ),
-                          stage:
-                              _activeStage,
-                        ),
-                      ),
-                    );
+              const SizedBox(height: 10),
 
-                    _loadRecords(
-                      silent: true,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(
-                height: 10,
-              ),
+              // NEW: Main CHECKING entry point
               Card(
                 elevation: 0,
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  side: const BorderSide(
+                    color: Color(0xFFE2E8F0),
+                  ),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF17365D),
-                    child: Icon(Icons.handshake, color: Colors.white),
+                    child: Icon(
+                      Icons.fact_check_outlined,
+                      color: Colors.white,
+                    ),
+                  ),
+                  title: const Text(
+                    'CHECKING',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'GPID based or Map / Geo-Tagged Mandap checking',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _openCheckingSelection,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              Card(
+                elevation: 0,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(
+                    color: Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF17365D),
+                    child: Icon(
+                      Icons.temple_hindu,
+                      color: Colors.white,
+                    ),
+                  ),
+                  title: const Text(
+                    'GPID Ganesh Idols',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'View complete GPID list',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _records.length.toString(),
+                          style: const TextStyle(
+                            color: Color(0xFF17365D),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => _ScopedGpidListScreen(
+                          records:
+                              List<Map<String, dynamic>>.from(_records),
+                          stage: _activeStage,
+                        ),
+                      ),
+                    );
+
+                    _loadRecords(silent: true);
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              Card(
+                elevation: 0,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(
+                    color: Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF17365D),
+                    child: Icon(
+                      Icons.handshake,
+                      color: Colors.white,
+                    ),
                   ),
                   title: const Text(
                     'Resource Sharing',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
-                  subtitle: const Text('Manage & Request Resources'),
+                  subtitle: const Text(
+                    'Manage & Request Resources',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     final isAdmin = widget.authenticatedUser.isAdmin;
+
                     if (isAdmin) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => ResourceCommandDashboardScreen(
-                            userPoliceStationId: widget.policeStation,
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              ResourceCommandDashboardScreen(
+                            userPoliceStationId:
+                                widget.policeStation,
                           ),
                         ),
                       );
                     } else {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        MaterialPageRoute<void>(
                           builder: (_) => ResourceDirectoryScreen(
-                            userPoliceStationId: widget.policeStation,
+                            userPoliceStationId:
+                                widget.policeStation,
                             role: ResourceUserRole.fieldOfficer,
                           ),
                         ),
@@ -2273,35 +1470,21 @@ void initState() {
                   },
                 ),
               ),
-              const SizedBox(
-                height: 22,
-              ),
+              const SizedBox(height: 22),
               const Text(
                 'Festival Stages',
-                style:
-                    TextStyle(
+                style: TextStyle(
                   fontSize: 20,
-                  fontWeight:
-                      FontWeight.bold,
-                  color:
-                      Color(
-                    0xFF0F172A,
-                  ),
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(
-                height: 10,
-              ),
+              const SizedBox(height: 10),
               _StageTile(
                 number: '1',
-                title:
-                    'Pre-Installation',
-                status:
-                    _activeStage == 1
-                        ? 'ACTIVE'
-                        : 'Available',
-                active:
-                    _activeStage == 1,
+                title: 'Pre-Installation',
+                status: _activeStage == 1 ? 'ACTIVE' : 'Available',
+                active: _activeStage == 1,
                 unlocked: true,
                 onTap: () {
                   setState(() {
@@ -2311,14 +1494,9 @@ void initState() {
               ),
               _StageTile(
                 number: '2',
-                title:
-                    'Installation',
-                status:
-                    _activeStage == 2
-                        ? 'ACTIVE'
-                        : 'Available',
-                active:
-                    _activeStage == 2,
+                title: 'Installation',
+                status: _activeStage == 2 ? 'ACTIVE' : 'Available',
+                active: _activeStage == 2,
                 unlocked: true,
                 onTap: () {
                   setState(() {
@@ -2328,14 +1506,9 @@ void initState() {
               ),
               _StageTile(
                 number: '3',
-                title:
-                    'During Festivity',
-                status:
-                    _activeStage == 3
-                        ? 'ACTIVE'
-                        : 'Available',
-                active:
-                    _activeStage == 3,
+                title: 'During Festivity',
+                status: _activeStage == 3 ? 'ACTIVE' : 'Available',
+                active: _activeStage == 3,
                 unlocked: true,
                 onTap: () {
                   setState(() {
@@ -2345,21 +1518,15 @@ void initState() {
               ),
               const _StageTile(
                 number: '4',
-                title:
-                    'Immersion',
-                status:
-                    'Not Started',
+                title: 'Immersion',
+                status: 'Not Started',
               ),
               const _StageTile(
                 number: '5',
-                title:
-                    'Post-Immersion',
-                status:
-                    'Not Started',
+                title: 'Post-Immersion',
+                status: 'Not Started',
               ),
-              const SizedBox(
-                height: 30,
-              ),
+              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -2367,56 +1534,33 @@ void initState() {
     );
   }
 
-  Widget _officerChip(
-    String text,
-  ) {
+  Widget _officerChip(String text) {
     return Container(
-      padding:
-          const EdgeInsets
-              .symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 9,
         vertical: 5,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            const Color(
-          0xFFF1F5F9,
-        ),
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
-        border:
-            Border.all(
-          color:
-              const Color(
-            0xFFE2E8F0,
-          ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
         ),
       ),
-      child:
-          Text(
+      child: Text(
         text,
-        style:
-            const TextStyle(
+        style: const TextStyle(
           fontSize: 11,
-          color:
-              Color(
-            0xFF475569,
-          ),
-          fontWeight:
-              FontWeight.w600,
+          color: Color(0xFF475569),
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 }
 
-class _ScopedGpidListScreen
-    extends StatelessWidget {
-  final List<Map<String, dynamic>>
-      records;
+class _ScopedGpidListScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> records;
   final int stage;
 
   const _ScopedGpidListScreen({
@@ -2424,227 +1568,127 @@ class _ScopedGpidListScreen
     required this.stage,
   });
 
-  String _text(
-    dynamic value,
-  ) {
+  String _text(dynamic value) {
     if (value == null) {
       return '';
     }
 
-    final text =
-        value.toString().trim();
+    final text = value.toString().trim();
 
-    if (text.isEmpty ||
-        text.toLowerCase() ==
-            'null') {
+    if (text.isEmpty || text.toLowerCase() == 'null') {
       return '';
     }
 
     return text;
   }
 
-  String _displayText(
-    dynamic value,
-  ) {
-    final valueText =
-        _text(value);
-
-    return valueText.isEmpty
-        ? '-'
-        : valueText;
+  String _displayText(dynamic value) {
+    final valueText = _text(value);
+    return valueText.isEmpty ? '-' : valueText;
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     final sortedRecords =
-        List<Map<String, dynamic>>.from(
-      records,
-    );
+        List<Map<String, dynamic>>.from(records);
 
     sortedRecords.sort(
-      (
-        Map<String, dynamic> a,
-        Map<String, dynamic> b,
-      ) {
-        return _text(
-          a['unique_id'],
-        ).compareTo(
-          _text(
-            b['unique_id'],
-          ),
+      (Map<String, dynamic> a, Map<String, dynamic> b) {
+        return _text(a['unique_id']).compareTo(
+          _text(b['unique_id']),
         );
       },
     );
 
     return Scaffold(
-      backgroundColor:
-          const Color(
-        0xFFF1F5F9,
-      ),
-      appBar:
-          AppBar(
-        backgroundColor:
-            const Color(
-          0xFF17365D,
-        ),
-        foregroundColor:
-            Colors.white,
-        title:
-            Text(
+      backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF17365D),
+        foregroundColor: Colors.white,
+        title: Text(
           stage == 3
               ? 'During Festivity - Accessible GPIDs'
               : stage == 2
                   ? 'Installation - Accessible GPIDs'
                   : 'Pre-Installation - Accessible GPIDs',
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
-      body:
-          sortedRecords.isEmpty
-              ? const Center(
-                  child:
-                      Padding(
-                    padding:
-                        EdgeInsets
-                            .all(
-                      24,
-                    ),
-                    child:
-                        Text(
-                      'No GPID records are available in your assigned Police Stations.',
-                      textAlign:
-                          TextAlign
-                              .center,
-                    ),
-                  ),
-                )
-              : ListView
-                  .builder(
-                  padding:
-                      const EdgeInsets
-                          .all(
-                    12,
-                  ),
-                  itemCount:
-                      sortedRecords
-                          .length,
-                  itemBuilder:
-                      (
-                    BuildContext
-                        context,
-                    int index,
-                  ) {
-                    final record =
-                        sortedRecords[
-                            index];
-
-                    final gpid =
-                        _text(
-                      record[
-                          'unique_id'],
-                    );
-
-                    return Card(
-                      elevation: 0,
-                      margin:
-                          const EdgeInsets
-                              .only(
-                        bottom: 8,
-                      ),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          12,
-                        ),
-                        side:
-                            const BorderSide(
-                          color:
-                              Color(
-                            0xFFE2E8F0,
-                          ),
-                        ),
-                      ),
-                      child:
-                          ListTile(
-                        title:
-                            Text(
-                          _displayText(
-                            record[
-                                'unique_id'],
-                          ),
-                          style:
-                              const TextStyle(
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                            color:
-                                Color(
-                              0xFF17365D,
-                            ),
-                          ),
-                        ),
-                        subtitle:
-                            Text(
-                          '${_displayText(record['name'])}\n'
-                          '${_displayText(record['ps_name'])}',
-                        ),
-                        isThreeLine:
-                            true,
-                        trailing:
-                            const Icon(
-                          Icons
-                              .chevron_right,
-                        ),
-                        onTap:
-                            gpid.isEmpty
-                                ? null
-                                : () {
-                                    Navigator
-                                        .push(
-                                      context,
-                                      MaterialPageRoute<
-                                          void>(
-                                        builder:
-                                            (_) =>
-                                                stage == 3
-                                                    ? FestivityCheckScreen(
-                                                        applicationId:
-                                                            gpid,
-                                                      )
-                                                    : stage == 2
-                                                        ? InstallationCheckScreen(
-                                                            applicationId:
-                                                                gpid,
-                                                            ganeshRecord:
-                                                                record,
-                                                          )
-                                                        : PreInstallationScreen(
-                                                            applicationId:
-                                                                gpid,
-                                                            ganeshRecord:
-                                                                record,
-                                                          ),
-                                      ),
-                                    );
-                                  },
-                      ),
-                    );
-                  },
+      body: sortedRecords.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No GPID records are available in your assigned Police Stations.',
+                  textAlign: TextAlign.center,
                 ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: sortedRecords.length,
+              itemBuilder: (
+                BuildContext context,
+                int index,
+              ) {
+                final record = sortedRecords[index];
+                final gpid = _text(record['unique_id']);
+
+                return Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(
+                      color: Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: ListTile(
+                    title: Text(
+                      _displayText(record['unique_id']),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF17365D),
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${_displayText(record['name'])}\n'
+                      '${_displayText(record['ps_name'])}',
+                    ),
+                    isThreeLine: true,
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: gpid.isEmpty
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => stage == 3
+                                    ? FestivityCheckScreen(
+                                        applicationId: gpid,
+                                      )
+                                    : stage == 2
+                                        ? InstallationCheckScreen(
+                                            applicationId: gpid,
+                                            ganeshRecord: record,
+                                          )
+                                        : PreInstallationScreen(
+                                            applicationId: gpid,
+                                            ganeshRecord: record,
+                                          ),
+                              ),
+                            );
+                          },
+                  ),
+                );
+              },
+            ),
     );
   }
 }
-
-class _StageTile
-    extends StatelessWidget {
+class _StageTile extends StatelessWidget {
   final String number;
   final String title;
   final String status;
@@ -2662,80 +1706,41 @@ class _StageTile
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color:
-          Colors.white,
-      shape:
-          RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
-        side:
-            const BorderSide(
-          color:
-              Color(
-            0xFFE2E8F0,
-          ),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(
+          color: Color(0xFFE2E8F0),
         ),
       ),
-      child:
-          ListTile(
-        onTap:
-            unlocked ? onTap : null,
-        leading:
-            CircleAvatar(
-          backgroundColor:
-              active || unlocked
-                  ? const Color(
-                      0xFF17365D,
-                    )
-                  : const Color(
-                      0xFFE2E8F0,
-                    ),
+      child: ListTile(
+        onTap: unlocked ? onTap : null,
+        leading: CircleAvatar(
+          backgroundColor: active || unlocked
+              ? const Color(0xFF17365D)
+              : const Color(0xFFE2E8F0),
           foregroundColor:
-              active || unlocked
-                  ? Colors.white
-                  : Colors.black54,
-          child:
-              Text(
-            number,
-          ),
+              active || unlocked ? Colors.white : Colors.black54,
+          child: Text(number),
         ),
-        title:
-            Text(
+        title: Text(
           title,
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
           ),
         ),
-        subtitle:
-            Text(
-          status,
-        ),
-        trailing:
-            active
-                ? const Icon(
-                    Icons
-                        .check_circle,
-                    color:
-                        Colors.green,
-                  )
-                : unlocked
-                    ? const Icon(
-                        Icons
-                            .chevron_right,
-                      )
-                    : const Icon(
-                        Icons
-                            .lock_outline,
-                      ),
+        subtitle: Text(status),
+        trailing: active
+            ? const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+              )
+            : unlocked
+                ? const Icon(Icons.chevron_right)
+                : const Icon(Icons.lock_outline),
       ),
     );
   }

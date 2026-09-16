@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PoliceStationAccess {
   final String? id;
@@ -357,6 +358,8 @@ class AuthService {
    * here for subsequent authenticated API calls.
    */
   static String? _sessionCookie;
+  
+  static String? _pendingUserJson;
 
   static String? get sessionCookie =>
       _sessionCookie;
@@ -364,6 +367,34 @@ class AuthService {
   static bool get hasActiveSession =>
       _sessionCookie != null &&
       _sessionCookie!.isNotEmpty;
+
+  static Future<AuthenticatedUser?> restoreSession() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? cookie = prefs.getString('session_cookie');
+      final String? userJsonStr = prefs.getString('user_profile');
+
+      if (cookie != null && cookie.isNotEmpty && userJsonStr != null && userJsonStr.isNotEmpty) {
+        final dynamic userData = jsonDecode(userJsonStr);
+        if (userData is Map<String, dynamic>) {
+          final AuthenticatedUser user = AuthenticatedUser.fromJson(userData);
+          _sessionCookie = cookie;
+          return user;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> persistSession() async {
+    if (_sessionCookie != null && _pendingUserJson != null) {
+      try {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('session_cookie', _sessionCookie!);
+        await prefs.setString('user_profile', _pendingUserJson!);
+      } catch (_) {}
+    }
+  }
 
   static Future<LoginResult> login({
     required String employeeId,
@@ -471,6 +502,8 @@ class AuthService {
           AuthenticatedUser.fromJson(
         userData,
       );
+
+      _pendingUserJson = jsonEncode(userData);
 
       return LoginResult(
         success: true,
@@ -588,5 +621,10 @@ class AuthService {
 
   static void clearSession() {
     _sessionCookie = null;
+    _pendingUserJson = null;
+    SharedPreferences.getInstance().then((SharedPreferences prefs) {
+      prefs.remove('session_cookie');
+      prefs.remove('user_profile');
+    }).catchError((_) {});
   }
 }

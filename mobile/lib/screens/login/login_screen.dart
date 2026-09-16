@@ -26,6 +26,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String errorMessage = '';
 
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    setState(() {
+      isLoggingIn = true;
+    });
+
+    final AuthenticatedUser? user = await AuthService.restoreSession();
+    if (user != null) {
+      await _onLoginSuccess(user);
+    } else {
+      if (mounted) {
+        setState(() {
+          isLoggingIn = false;
+        });
+      }
+    }
+  }
+
   Future<void> login() async {
     if (isLoggingIn) {
       return;
@@ -130,6 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    await AuthService.persistSession();
+    await _onLoginSuccess(user);
+  }
+
+  Future<void> _onLoginSuccess(AuthenticatedUser user) async {
     /*
      * AUTHENTICATED USER PROFILE
      *

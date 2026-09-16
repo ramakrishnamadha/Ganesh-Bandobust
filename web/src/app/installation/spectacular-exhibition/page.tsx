@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 
-export default function DocumentarySetupPage() {
+export default function SpectacularExhibitionPage() {
   const router = useRouter();
 
   return (
@@ -15,7 +15,7 @@ export default function DocumentarySetupPage() {
             </p>
 
             <h1 className="mt-1 text-2xl font-bold">
-              Documentary Setup
+              Spectacular Exhibition Setup
             </h1>
 
             <p className="mt-1 text-sm text-blue-100">
@@ -28,7 +28,7 @@ export default function DocumentarySetupPage() {
             onClick={() => router.push("/installation")}
             className="rounded-lg border border-white/30 px-4 py-2 hover:bg-white/10"
           >
-            ← Installation
+            ? Installation
           </button>
         </div>
       </header>
@@ -36,42 +36,43 @@ export default function DocumentarySetupPage() {
       <div className="mx-auto max-w-6xl px-6 py-8">
         <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
           <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-            Documentary Setup Monitoring
+            Exhibition Monitoring
           </p>
 
           <h2 className="mt-2 text-xl font-bold text-slate-800">
-            Stage-2 Documentary Arrangements
+            Spectacular / Special Exhibition Setup
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            This page is prepared for supervisory monitoring of documentary
-            setup at the Ganesh point during Installation Stage.
+            Supervisory monitoring of special exhibition arrangements,
+            permissions, safety issues, violations and action-required cases
+            during the Installation Stage.
           </p>
         </section>
 
         <section className="grid gap-5 md:grid-cols-2">
-          <SetupCard title="Point Book">
-            Monitor whether the Point Book is available and properly maintained.
+          <SetupCard title="Exhibition Available">
+            Monitor whether any spectacular or special exhibition setup is present.
           </SetupCard>
 
-          <SetupCard title="Geo-Tagging">
-            Monitor whether the installation point is properly geo-tagged.
+          <SetupCard title="Permission Status">
+            Monitor whether the required permission or approval is available.
           </SetupCard>
 
-          <SetupCard title="QR Code">
-            Monitor whether the QR Code is available and properly displayed.
+          <SetupCard title="Safety Arrangements">
+            Monitor safety precautions provided for the exhibition setup.
           </SetupCard>
 
-          <SetupCard title="GPID Board">
-            Monitor whether the GPID Board is displayed at the Ganesh point.
+          <SetupCard title="Crowd Impact">
+            Monitor possible crowd congregation or movement impact.
           </SetupCard>
 
-          <SetupCard title="Police Notice Board">
-            Monitor whether the Police Notice Board is displayed.
+          <SetupCard title="Traffic Impact">
+            Monitor whether the exhibition setup creates any traffic obstruction or risk.
           </SetupCard>
 
-          <SetupCard title="Police Contact Details">
-            Monitor whether relevant Police contact numbers are displayed.
+          <SetupCard title="Violation / Action Required">
+            Monitor violations, instructions issued and corrective action required.
           </SetupCard>
         </section>
 
@@ -81,8 +82,8 @@ export default function DocumentarySetupPage() {
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-amber-800">
-            Live Stage-2 documentary setup data will be connected after the
-            finalized Installation API and persistence workflow are available.
+            Live Stage-2 exhibition data will be displayed after the
+            Installation API and persistence workflow are connected.
           </p>
         </section>
       </div>

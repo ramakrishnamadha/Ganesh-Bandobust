@@ -1178,6 +1178,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute<void>(
                   builder: (_) => GpidQrScannerScreen(
                     authenticatedUser: widget.authenticatedUser,
+                    onVerified: (record, stages) {
+                      _openGpid(record);
+                    },
                   ),
                 ),
               );

@@ -32,7 +32,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
   void initState() {
     super.initState();
     _controller = MobileScannerController(
-      detectionSpeed: DetectionSpeed.noDuplicates,
+      detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
     );
@@ -81,14 +81,18 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
         setState(() {
           _isProcessing = false;
           _statusMessage = null;
+          _lastScanTime = null;
         });
       }
       return;
     }
 
-    final candidateGpid = qrResult.gpid;
+    await _verifyGpid(qrResult.gpid);
+  }
 
+  Future<void> _verifyGpid(String candidateGpid) async {
     setState(() {
+      _isProcessing = true;
       _statusMessage = 'Verifying GPID $candidateGpid & jurisdiction...';
     });
 
@@ -108,9 +112,15 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           'unique_id': candidateGpid,
         };
 
+        try {
+          await _controller.stop();
+        } catch (_) {}
+
+        if (!mounted) return;
+
         if (widget.onVerified != null) {
-          widget.onVerified!(record, verification.stages);
           Navigator.pop(context);
+          widget.onVerified!(record, verification.stages);
         } else {
           // Replace scanner with the existing Festivity Checking flow
           await Navigator.pushReplacement(
@@ -135,6 +145,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           setState(() {
             _isProcessing = false;
             _statusMessage = null;
+            _lastScanTime = null;
           });
         }
         break;
@@ -152,6 +163,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           setState(() {
             _isProcessing = false;
             _statusMessage = null;
+            _lastScanTime = null;
           });
         }
         break;
@@ -160,7 +172,8 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
         // 400: Malformed GPID
         await _showErrorDialog(
           title: 'Malformed GPID',
-          message: verification.errorMessage ?? 'GPID "$candidateGpid" has an invalid format.',
+          message: verification.errorMessage ??
+              'GPID "$candidateGpid" has an invalid format.',
           icon: Icons.error_outline,
           iconColor: Colors.red,
         );
@@ -168,6 +181,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           setState(() {
             _isProcessing = false;
             _statusMessage = null;
+            _lastScanTime = null;
           });
         }
         break;
@@ -187,22 +201,93 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
 
       case GpidVerificationStatus.networkError:
       case GpidVerificationStatus.serverError:
-        // Network / server failure
-        await _showErrorDialog(
+        // Network / server failure with Retry
+        final bool shouldRetry = await _showNetworkRetryDialog(
           title: 'Verification Failed',
           message: verification.errorMessage ??
               'Unable to connect to the server to verify GPID "$candidateGpid". Please check your network.',
-          icon: Icons.cloud_off,
-          iconColor: Colors.orange,
         );
-        if (mounted) {
+
+        if (shouldRetry && mounted) {
+          await _verifyGpid(candidateGpid);
+        } else if (mounted) {
           setState(() {
             _isProcessing = false;
             _statusMessage = null;
+            _lastScanTime = null;
           });
         }
         break;
     }
+  }
+
+  Future<bool> _showNetworkRetryDialog({
+    required String title,
+    required String message,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          icon: const Icon(
+            Icons.cloud_off,
+            color: Colors.orange,
+            size: 38,
+          ),
+          title: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF4B5563),
+              height: 1.4,
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actions: [
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop(false);
+              },
+              child: const Text('Scan Another QR'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF17365D),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop(true);
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Retry'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   Future<void> _showSecurityDialog({

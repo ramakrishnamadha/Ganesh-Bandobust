@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ganesh_bandobust_mobile/services/gpid_api_service.dart';
 import 'package:ganesh_bandobust_mobile/services/gpid_qr_service.dart';
 
 void main() {
@@ -65,6 +66,100 @@ void main() {
       expect(GpidQrService.isValidGpidFormat('AB'), isFalse);
       expect(GpidQrService.isValidGpidFormat('A B C D'), isFalse);
       expect(GpidQrService.isValidGpidFormat('A'*40), isFalse); // Exceeds 32 chars
+    });
+  });
+
+  group('GpidVerificationResult State Tests', () {
+    test('authorized state constructs and verifies correctly', () {
+      const result = GpidVerificationResult(
+        status: GpidVerificationStatus.authorized,
+        gpid: 'HYDCMRZCMNR1749',
+        isAuthorized: true,
+        record: <String, dynamic>{
+          'unique_id': 'HYDCMRZCMNR1749',
+          'ps_name': 'Charminar',
+          'name': 'Ganesh Mandap Association',
+        },
+        stages: <String, dynamic>{
+          'stage1': {'status': 'COMPLETED'},
+          'stage2': {'status': 'COMPLETED'},
+          'stage3': {'status': 'IN_PROGRESS'},
+        },
+      );
+
+      expect(result.status, equals(GpidVerificationStatus.authorized));
+      expect(result.isAuthorized, isTrue);
+      expect(result.gpid, equals('HYDCMRZCMNR1749'));
+      expect(result.record, isNotNull);
+      expect(result.record!['ps_name'], equals('Charminar'));
+      expect(result.stages, isNotNull);
+      expect(result.stages!['stage3']['status'], equals('IN_PROGRESS'));
+      expect(result.isOfflineFallback, isFalse);
+    });
+
+    test('unauthorized state correctly captures jurisdiction denial', () {
+      const result = GpidVerificationResult(
+        status: GpidVerificationStatus.unauthorized,
+        gpid: 'HYDCMRZCMNR1749',
+        isAuthorized: false,
+        errorMessage:
+            'Access Denied: GPID in Charminar PS is outside your authorized scope (Asif Nagar PS).',
+      );
+
+      expect(result.status, equals(GpidVerificationStatus.unauthorized));
+      expect(result.isAuthorized, isFalse);
+      expect(result.gpid, equals('HYDCMRZCMNR1749'));
+      expect(result.errorMessage, contains('Access Denied'));
+      expect(result.record, isNull);
+    });
+
+    test('notFound state correctly represents unregistered GPID', () {
+      const result = GpidVerificationResult(
+        status: GpidVerificationStatus.notFound,
+        gpid: 'HYDUNKNOWN9999',
+        isAuthorized: false,
+        errorMessage: 'GPID not found in master records: HYDUNKNOWN9999',
+      );
+
+      expect(result.status, equals(GpidVerificationStatus.notFound));
+      expect(result.isAuthorized, isFalse);
+      expect(result.gpid, equals('HYDUNKNOWN9999'));
+      expect(result.errorMessage, contains('not found'));
+    });
+
+    test('invalidFormat state correctly represents malformed input', () {
+      const result = GpidVerificationResult(
+        status: GpidVerificationStatus.invalidFormat,
+        gpid: '',
+        isAuthorized: false,
+        errorMessage: 'GPID cannot be empty.',
+      );
+
+      expect(result.status, equals(GpidVerificationStatus.invalidFormat));
+      expect(result.isAuthorized, isFalse);
+      expect(result.gpid, isEmpty);
+      expect(result.errorMessage, equals('GPID cannot be empty.'));
+    });
+
+    test('networkError state allows offline fallback tracking', () {
+      const result = GpidVerificationResult(
+        status: GpidVerificationStatus.networkError,
+        gpid: 'HYDCMRZCMNR1749',
+        isAuthorized: false,
+        errorMessage: 'Network connection failed and GPID is not stored in offline cache.',
+        isOfflineFallback: false,
+      );
+
+      expect(result.status, equals(GpidVerificationStatus.networkError));
+      expect(result.isAuthorized, isFalse);
+      expect(result.errorMessage, contains('Network connection failed'));
+    });
+
+    test('verifyGpidJurisdiction rejects empty GPID with invalidFormat immediately', () async {
+      final result = await GpidApiService.verifyGpidJurisdiction(gpid: '   ');
+      expect(result.status, equals(GpidVerificationStatus.invalidFormat));
+      expect(result.isAuthorized, isFalse);
+      expect(result.errorMessage, contains('empty'));
     });
   });
 }

@@ -24,7 +24,7 @@ class MapBasedCheckingScreen extends StatefulWidget {
 
 class _MapBasedCheckingScreenState extends State<MapBasedCheckingScreen> {
   static const String _geoMasterUrl =
-      'http://13.200.137.199/api/festivity/gpid-master';
+      'http://3.7.18.151/api/festivity/gpid-master';
 
   final MapController _mapController = MapController();
 

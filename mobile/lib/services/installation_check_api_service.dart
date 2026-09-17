@@ -7,7 +7,7 @@ import 'auth_service.dart';
 
 class InstallationCheckApiService {
   static const String _baseUrl =
-      'http://13.200.137.199/api/installation-checks';
+      'http://3.7.18.151/api/installation-checks';
 
   static String _requireSessionCookie() {
     final String? cookie = AuthService.sessionCookie;

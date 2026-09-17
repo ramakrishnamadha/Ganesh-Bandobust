@@ -7,7 +7,7 @@ import 'auth_service.dart';
 
 class VerificationApiService {
   static const String _baseUrl =
-      'http://13.200.137.199/api/verification';
+      'http://3.7.18.151/api/verification';
 
   static String _requireSessionCookie() {
     final String? cookie =

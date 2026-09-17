@@ -7,7 +7,7 @@ import 'auth_service.dart';
 
 class FestivityCheckApiService {
   static const String _baseUrl =
-      'http://13.200.137.199/api/festivity-checks';
+      'http://3.7.18.151/api/festivity-checks';
 
   static String _requireSessionCookie() {
     final String? cookie = AuthService.sessionCookie;

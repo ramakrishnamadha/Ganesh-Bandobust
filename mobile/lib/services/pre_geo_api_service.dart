@@ -28,7 +28,7 @@ class PreGeoApiService {
   /// No source-code change will be required.
   static const String _baseUrl = String.fromEnvironment(
     'PRE_GEO_BASE_URL',
-    defaultValue: 'http://127.0.0.1:3000',
+    defaultValue: 'http://3.7.18.151',
   );
 
   static const Duration _requestTimeout = Duration(

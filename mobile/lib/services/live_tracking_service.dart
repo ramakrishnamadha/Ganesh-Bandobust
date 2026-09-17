@@ -18,7 +18,7 @@ class LiveTrackingService {
   static const String _baseUrl =
       String.fromEnvironment(
     'TRACKING_BASE_URL',
-    defaultValue: 'http://127.0.0.1:3000',
+    defaultValue: 'http://3.7.18.151',
   );
 
   static const Duration _requestTimeout =

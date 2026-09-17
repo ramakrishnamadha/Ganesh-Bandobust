@@ -347,7 +347,7 @@ class AuthService {
   AuthService._();
 
   static const String _baseUrl =
-      'http://13.200.137.199';
+      'http://3.7.18.151';
 
   /*
    * The Web authentication API returns an

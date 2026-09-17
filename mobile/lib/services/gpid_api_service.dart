@@ -19,7 +19,7 @@ class GpidCacheStatus {
 
 class GpidApiService {
   static const String _baseUrl =
-      'http://13.200.137.199';
+      'http://3.7.18.151';
 
   static const String _gpidUrl =
       '$_baseUrl/api/gpid';

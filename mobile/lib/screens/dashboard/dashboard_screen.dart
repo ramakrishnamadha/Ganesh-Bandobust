@@ -12,6 +12,7 @@ import '../festivity/festivity_check_screen.dart';
 import '../installation/installation_check_screen.dart';
 import '../login/login_screen.dart';
 import '../pre_installation/pre_installation_screen.dart';
+import '../qr/gpid_qr_scanner_screen.dart';
 import '../resources/resource_command_dashboard_screen.dart';
 import '../resources/resource_directory_screen.dart';
 
@@ -563,6 +564,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       List<Map<String, dynamic>>.from(
                     _records,
                   ),
+                ),
+              ),
+            );
+          },
+          onQrBasedChecking: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => GpidQrScannerScreen(
+                  authenticatedUser: widget.authenticatedUser,
                 ),
               ),
             );
@@ -1158,6 +1169,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _loadRecords();
               },
             ),
+          IconButton(
+            tooltip: 'Scan GPID QR',
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => GpidQrScannerScreen(
+                    authenticatedUser: widget.authenticatedUser,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Logout',
             icon: const Icon(Icons.logout),

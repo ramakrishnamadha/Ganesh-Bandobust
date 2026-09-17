@@ -6,6 +6,7 @@ class CheckingSelectionScreen extends StatelessWidget {
   final String scopeLabel;
   final VoidCallback onGpidBasedChecking;
   final VoidCallback onMapBasedChecking;
+  final VoidCallback? onQrBasedChecking;
 
   const CheckingSelectionScreen({
     super.key,
@@ -14,6 +15,7 @@ class CheckingSelectionScreen extends StatelessWidget {
     required this.scopeLabel,
     required this.onGpidBasedChecking,
     required this.onMapBasedChecking,
+    this.onQrBasedChecking,
   });
 
   @override
@@ -120,6 +122,18 @@ class CheckingSelectionScreen extends StatelessWidget {
             buttonText: 'OPEN MAP',
             onTap: onMapBasedChecking,
           ),
+
+          if (onQrBasedChecking != null) ...[
+            const SizedBox(height: 14),
+            _checkingCard(
+              icon: Icons.qr_code_scanner,
+              title: 'QR Code Mandap Checking',
+              subtitle:
+                  'Scan the Mandap GPID QR code to verify jurisdiction and immediately start checking.',
+              buttonText: 'SCAN QR CODE',
+              onTap: onQrBasedChecking!,
+            ),
+          ],
         ],
       ),
     );

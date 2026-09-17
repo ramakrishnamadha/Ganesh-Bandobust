@@ -17,6 +17,36 @@ class GpidCacheStatus {
   });
 }
 
+enum GpidVerificationStatus {
+  authorized,
+  unauthorized,
+  notFound,
+  invalidFormat,
+  unauthenticated,
+  networkError,
+  serverError,
+}
+
+class GpidVerificationResult {
+  final GpidVerificationStatus status;
+  final String gpid;
+  final bool isAuthorized;
+  final String? errorMessage;
+  final Map<String, dynamic>? record;
+  final Map<String, dynamic>? stages;
+  final bool isOfflineFallback;
+
+  const GpidVerificationResult({
+    required this.status,
+    required this.gpid,
+    required this.isAuthorized,
+    this.errorMessage,
+    this.record,
+    this.stages,
+    this.isOfflineFallback = false,
+  });
+}
+
 class GpidApiService {
   static const String _baseUrl =
       'http://3.7.18.151';
@@ -525,5 +555,202 @@ class GpidApiService {
         'Unable to load GPID records: $e',
       );
     }
+  }
+
+  static Future<GpidVerificationResult> verifyGpidJurisdiction({
+    required String gpid,
+    AuthenticatedUser? user,
+  }) async {
+    final String cleanGpid = gpid.trim().toUpperCase();
+    if (cleanGpid.isEmpty) {
+      return const GpidVerificationResult(
+        status: GpidVerificationStatus.invalidFormat,
+        gpid: '',
+        isAuthorized: false,
+        errorMessage: 'GPID cannot be empty.',
+      );
+    }
+
+    final String? sessionCookie = AuthService.sessionCookie;
+    final Uri targetUri =
+        Uri.parse('$_statusUrl?gpid=${Uri.encodeComponent(cleanGpid)}');
+
+    // 1. Attempt server-side verification first
+    if (sessionCookie != null && sessionCookie.isNotEmpty) {
+      try {
+        final http.Response response = await http.get(
+          targetUri,
+          headers: <String, String>{
+            'Accept': 'application/json',
+            'Cookie': sessionCookie,
+          },
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final dynamic decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic> && decoded['success'] == true) {
+            final Map<String, dynamic>? recordData =
+                decoded['record'] is Map<String, dynamic>
+                    ? Map<String, dynamic>.from(decoded['record'])
+                    : null;
+            final Map<String, dynamic>? stagesData =
+                decoded['stages'] is Map<String, dynamic>
+                    ? Map<String, dynamic>.from(decoded['stages'])
+                    : null;
+
+            return GpidVerificationResult(
+              status: GpidVerificationStatus.authorized,
+              gpid: cleanGpid,
+              isAuthorized: true,
+              record: recordData,
+              stages: stagesData,
+            );
+          }
+        }
+
+        if (response.statusCode == 403) {
+          String msg =
+              'Access Denied: You do not have jurisdiction to inspect this GPID.';
+          try {
+            final dynamic decoded = jsonDecode(response.body);
+            if (decoded is Map<String, dynamic> && decoded['error'] != null) {
+              msg = decoded['error'].toString();
+            }
+          } catch (_) {}
+
+          return GpidVerificationResult(
+            status: GpidVerificationStatus.unauthorized,
+            gpid: cleanGpid,
+            isAuthorized: false,
+            errorMessage: msg,
+          );
+        }
+
+        if (response.statusCode == 404) {
+          String msg = 'GPID not found in master records.';
+          try {
+            final dynamic decoded = jsonDecode(response.body);
+            if (decoded is Map<String, dynamic> && decoded['error'] != null) {
+              msg = decoded['error'].toString();
+            }
+          } catch (_) {}
+
+          return GpidVerificationResult(
+            status: GpidVerificationStatus.notFound,
+            gpid: cleanGpid,
+            isAuthorized: false,
+            errorMessage: msg,
+          );
+        }
+
+        if (response.statusCode == 400) {
+          return GpidVerificationResult(
+            status: GpidVerificationStatus.invalidFormat,
+            gpid: cleanGpid,
+            isAuthorized: false,
+            errorMessage: 'Invalid GPID format: $cleanGpid',
+          );
+        }
+
+        if (response.statusCode == 401) {
+          return GpidVerificationResult(
+            status: GpidVerificationStatus.unauthenticated,
+            gpid: cleanGpid,
+            isAuthorized: false,
+            errorMessage: 'Your session has expired. Please log in again.',
+          );
+        }
+      } catch (_) {
+        // Network error / timeout: proceed to local cache check below
+      }
+    }
+
+    // 2. Offline Fallback: Check local cache with local jurisdiction evaluation
+    if (user != null) {
+      try {
+        final cachedRecords = await loadCachedRecords(userId: user.employeeId);
+        final matchingRecord = cachedRecords.firstWhere(
+          (r) {
+            final uId =
+                (r['unique_id'] ?? '').toString().trim().toUpperCase();
+            final ref = (r['ref_no'] ?? '').toString().trim().toUpperCase();
+            return uId == cleanGpid || ref == cleanGpid;
+          },
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (matchingRecord.isNotEmpty) {
+          final bool locallyPermitted =
+              _isPermittedLocally(matchingRecord, user);
+          if (!locallyPermitted) {
+            final psName =
+                matchingRecord['ps_name'] ?? 'another police station';
+            return GpidVerificationResult(
+              status: GpidVerificationStatus.unauthorized,
+              gpid: cleanGpid,
+              isAuthorized: false,
+              errorMessage:
+                  'Access Denied: GPID belongs to $psName PS (offline verification).',
+              isOfflineFallback: true,
+            );
+          }
+
+          return GpidVerificationResult(
+            status: GpidVerificationStatus.authorized,
+            gpid: cleanGpid,
+            isAuthorized: true,
+            record: matchingRecord,
+            isOfflineFallback: true,
+          );
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback when network failed and not in local cache
+    return GpidVerificationResult(
+      status: GpidVerificationStatus.networkError,
+      gpid: cleanGpid,
+      isAuthorized: false,
+      errorMessage:
+          'Network connection failed and GPID is not stored in offline cache.',
+    );
+  }
+
+  static bool _isPermittedLocally(
+    Map<String, dynamic> record,
+    AuthenticatedUser user,
+  ) {
+    if (user.isAdmin || user.allZones) return true;
+
+    String norm(dynamic v) {
+      return (v ?? '')
+          .toString()
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .replaceAll(RegExp(r'\s+ps$'), '')
+          .trim();
+    }
+
+    final ps = norm(record['ps_name']);
+    final userPs = norm(user.policeStationName);
+
+    if (user.allPoliceStations) {
+      final userZone = norm(user.zoneName);
+      final userDiv = norm(user.divisionName);
+      if (userZone.isNotEmpty) return norm(record['zone_name']) == userZone;
+      if (userDiv.isNotEmpty) return norm(record['division_name']) == userDiv;
+      if (userPs.isNotEmpty) return ps == userPs;
+      return false;
+    }
+
+    if (userPs.isNotEmpty && ps == userPs) return true;
+
+    final allowed = user.allowedPoliceStations
+        .where((a) => a.canView)
+        .map((a) => norm(a.policeStationName))
+        .where((n) => n.isNotEmpty)
+        .toSet();
+
+    return allowed.contains(ps);
   }
 }

@@ -8,7 +8,7 @@ import {
   SESSION_COOKIE_NAME,
   verifySessionToken,
 } from "@/lib/server/auth";
-import DashboardNav from "@/components/DashboardNav";
+import SidebarNav from "@/components/SidebarNav";
 
 export default async function DashboardLayout({
   children,
@@ -48,9 +48,9 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <DashboardNav />
-      <main className="flex-1 w-full max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row">
+      <SidebarNav />
+      <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 min-w-0">
         {children}
       </main>
     </div>

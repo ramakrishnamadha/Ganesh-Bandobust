@@ -4,8 +4,10 @@
     <!-- CAMERA / AR                                           -->
     <!-- ===================================================== -->
 
-    <!-- Camera permission for AR measurement -->
+    <!-- Camera permission and features for GPID QR Scanner & AR measurement -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
 
     <!-- ===================================================== -->

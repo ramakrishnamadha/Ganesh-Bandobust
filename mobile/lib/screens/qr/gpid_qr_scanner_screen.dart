@@ -444,6 +444,79 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           MobileScanner(
             controller: _controller,
             onDetect: _handleBarcode,
+            errorBuilder: (context, error) {
+              final isPermission =
+                  error.errorCode == MobileScannerErrorCode.permissionDenied;
+              return Container(
+                color: const Color(0xFF0F172A),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: isPermission
+                              ? Colors.red.withValues(alpha: 0.15)
+                              : Colors.amber.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isPermission
+                              ? Icons.no_photography
+                              : Icons.videocam_off,
+                          color: isPermission ? Colors.redAccent : Colors.amber,
+                          size: 38,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        isPermission
+                            ? 'Camera Permission Required'
+                            : 'Camera Unavailable',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        isPermission
+                            ? 'Camera access was denied. Please allow camera permission in Android App Settings to scan GPID QR codes.'
+                            : 'Unable to start camera preview (${error.errorCode.message}). Please check device camera.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF17365D),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back, size: 18),
+                        label: const Text('Go Back'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           // 2. Viewfinder Overlay

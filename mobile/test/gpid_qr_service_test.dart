@@ -48,6 +48,25 @@ void main() {
       expect(parsed.format, equals('url'));
     });
 
+    test('parseGpid handles GPID embedded inside text labels', () {
+      final samples = [
+        'GPID: HYDCMRZCMNR1749',
+        'GPID:HYDCMRZCMNR1749',
+        'Mandap ID: HYDCMRZCMNR1749, Zone: Central',
+        'Pandal ID - HYDCMRZCMNR1749',
+        'Ref# HYDCMRZCMNR1749',
+        'Unique ID: HYDCMRZCMNR1749',
+        'ID: HYDCMRZCMNR1749',
+      ];
+
+      for (final text in samples) {
+        final parsed = GpidQrService.parseGpid(text);
+        expect(parsed, isNotNull, reason: 'Failed for sample: $text');
+        expect(parsed!.gpid, equals('HYDCMRZCMNR1749'), reason: 'Wrong GPID for sample: $text');
+        expect(parsed.format, equals('embedded'), reason: 'Wrong format for sample: $text');
+      }
+    });
+
     test('parseGpid rejects malformed or random data', () {
       expect(GpidQrService.parseGpid(null), isNull);
       expect(GpidQrService.parseGpid(''), isNull);

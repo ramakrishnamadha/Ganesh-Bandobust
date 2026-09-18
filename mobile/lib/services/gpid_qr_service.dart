@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Representation of a parsed GPID QR code.
 class GpidQrResult {
   final String gpid;
-  final String format; // 'json' | 'url' | 'raw'
+  final String format; // 'json' | 'url' | 'raw' | 'embedded'
   final String rawData;
 
   const GpidQrResult({
@@ -15,6 +15,10 @@ class GpidQrResult {
 
 class GpidQrService {
   static final RegExp _gpidPattern = RegExp(r'^[A-Za-z0-9_-]{4,32}$');
+  static final RegExp _embeddedLabelPattern = RegExp(
+    r'(?:GPID|MANDAP\s*ID|PANDAL\s*ID|UNIQUE\s*ID|REF|ID)[\s:=#-]+([A-Za-z0-9_-]{4,32})',
+    caseSensitive: false,
+  );
 
   /// Generate official standard JSON QR payload for a GPID.
   static String generatePayload(String gpid) {
@@ -99,6 +103,19 @@ class GpidQrService {
         format: 'raw',
         rawData: trimmed,
       );
+    }
+
+    // 4. Try GPID embedded inside text (e.g. "GPID: HYDCMRZCMNR1749", "Mandap ID - HYDCMRZCMNR1749")
+    final embeddedMatch = _embeddedLabelPattern.firstMatch(trimmed);
+    if (embeddedMatch != null) {
+      final embeddedCandidate = embeddedMatch.group(1)?.trim().toUpperCase();
+      if (embeddedCandidate != null && isValidGpidFormat(embeddedCandidate)) {
+        return GpidQrResult(
+          gpid: embeddedCandidate,
+          format: 'embedded',
+          rawData: trimmed,
+        );
+      }
     }
 
     // Unrecognized or malformed QR format

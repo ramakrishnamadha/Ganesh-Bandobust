@@ -2,8 +2,15 @@ import { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { getWebSession } from "@/lib/server/auth";
+import {
+  getRoleScopeConfig,
+  resolveCompleteParentHierarchy,
+} from "@/lib/server/userManagementHelper";
 
-type JsonObject = Record<string, unknown>;
+type JsonObject = Record<
+  string,
+  unknown
+>;
 
 function text(value: unknown): string {
   if (
@@ -111,11 +118,11 @@ async function requireAdmin(
         },
         {
           status: 401,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       ),
       session: null,
+      adminUser: null,
     };
   }
 
@@ -124,9 +131,10 @@ async function requireAdmin(
       where: {
         id: session.userId,
       },
-
       select: {
         id: true,
+        employeeId: true,
+        name: true,
         role: true,
         status: true,
       },
@@ -144,17 +152,16 @@ async function requireAdmin(
         },
         {
           status: 403,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       ),
       session: null,
+      adminUser: null,
     };
   }
 
   if (
-    user.role.toUpperCase() !==
-    "ADMIN"
+    user.role.toUpperCase() !== "ADMIN"
   ) {
     return {
       error: Response.json(
@@ -164,17 +171,18 @@ async function requireAdmin(
         },
         {
           status: 403,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       ),
       session: null,
+      adminUser: null,
     };
   }
 
   return {
     error: null,
     session,
+    adminUser: user,
   };
 }
 
@@ -183,13 +191,9 @@ export async function GET(
 ) {
   try {
     const authorization =
-      await requireAdmin(
-        request,
-      );
+      await requireAdmin(request);
 
-    if (
-      authorization.error
-    ) {
+    if (authorization.error) {
       return authorization.error;
     }
 
@@ -209,10 +213,8 @@ export async function GET(
           role: true,
           accessLevel: true,
 
-          commissionerateCode:
-            true,
-          commissionerateName:
-            true,
+          commissionerateCode: true,
+          commissionerateName: true,
 
           rangeCode: true,
           rangeName: true,
@@ -223,24 +225,20 @@ export async function GET(
           divisionCode: true,
           divisionName: true,
 
-          policeStationCode:
-            true,
-          policeStationName:
-            true,
+          policeStationCode: true,
+          policeStationName: true,
 
           sectorCode: true,
           sectorName: true,
 
-          allPoliceStations:
-            true,
+          allPoliceStations: true,
           allDivisions: true,
           allZones: true,
           allRanges: true,
 
           status: true,
 
-          mustChangePassword:
-            true,
+          mustChangePassword: true,
 
           createdAt: true,
           updatedAt: true,
@@ -249,19 +247,16 @@ export async function GET(
             select: {
               id: true,
 
-              policeStationCode:
-                true,
+              policeStationCode: true,
 
-              policeStationName:
-                true,
+              policeStationName: true,
 
               canView: true,
               canEdit: true,
             },
 
             orderBy: {
-              policeStationName:
-                "asc",
+              policeStationName: "asc",
             },
           },
         },
@@ -276,14 +271,85 @@ export async function GET(
         ],
       });
 
+    // Compute dynamic summary stats from database records
+    let totalUsers = 0;
+    let activeUsers = 0;
+    let inactiveUsers = 0;
+
+    let fieldOfficers = 0;
+    let sectorIncharges = 0;
+    let psSupervisors = 0;
+    let divisionalSupervisors = 0;
+    let zonalSupervisors = 0;
+    let rangeSupervisors = 0;
+    let admins = 0;
+
+    for (const u of users) {
+      totalUsers += 1;
+      if (u.status === "ACTIVE") {
+        activeUsers += 1;
+      } else {
+        inactiveUsers += 1;
+      }
+
+      const roleUpper = (
+        u.role || ""
+      ).toUpperCase();
+
+      if (
+        roleUpper === "FIELD_OFFICER"
+      ) {
+        fieldOfficers += 1;
+      } else if (
+        roleUpper === "SECTOR_INCHARGE"
+      ) {
+        sectorIncharges += 1;
+      } else if (
+        roleUpper === "PS_SUPERVISOR" ||
+        roleUpper === "SHO"
+      ) {
+        psSupervisors += 1;
+      } else if (
+        roleUpper ===
+        "DIVISIONAL_SUPERVISOR"
+      ) {
+        divisionalSupervisors += 1;
+      } else if (
+        roleUpper === "ZONAL_SUPERVISOR"
+      ) {
+        zonalSupervisors += 1;
+      } else if (
+        roleUpper === "RANGE_SUPERVISOR"
+      ) {
+        rangeSupervisors += 1;
+      } else if (
+        roleUpper === "ADMIN"
+      ) {
+        admins += 1;
+      }
+    }
+
+    const summaryCards = {
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      fieldOfficers,
+      sectorIncharges,
+      psSupervisors,
+      divisionalSupervisors,
+      zonalSupervisors,
+      rangeSupervisors,
+      admins,
+    };
+
     return Response.json(
       {
         users,
+        summaryCards,
       },
       {
         status: 200,
-        headers:
-          responseHeaders(),
+        headers: responseHeaders(),
       },
     );
   } catch (error) {
@@ -294,13 +360,11 @@ export async function GET(
 
     return Response.json(
       {
-        error:
-          "Unable to load users.",
+        error: "Unable to load users.",
       },
       {
         status: 500,
-        headers:
-          responseHeaders(),
+        headers: responseHeaders(),
       },
     );
   }
@@ -311,13 +375,12 @@ export async function PATCH(
 ) {
   try {
     const authorization =
-      await requireAdmin(
-        request,
-      );
+      await requireAdmin(request);
 
     if (
       authorization.error ||
-      !authorization.session
+      !authorization.session ||
+      !authorization.adminUser
     ) {
       return authorization.error!;
     }
@@ -333,25 +396,21 @@ export async function PATCH(
         },
         {
           status: 400,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       );
     }
 
-    const userId =
-      text(body.userId);
+    const userId = text(body.userId);
 
     if (!userId) {
       return Response.json(
         {
-          error:
-            "User ID is required.",
+          error: "User ID is required.",
         },
         {
           status: 400,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       );
     }
@@ -361,24 +420,33 @@ export async function PATCH(
         where: {
           id: userId,
         },
-
         select: {
           id: true,
+          employeeId: true,
+          name: true,
           role: true,
+          accessLevel: true,
           status: true,
+          rangeName: true,
+          zoneName: true,
+          divisionName: true,
+          policeStationName: true,
+          sectorName: true,
+          allRanges: true,
+          allZones: true,
+          allDivisions: true,
+          allPoliceStations: true,
         },
       });
 
     if (!existingUser) {
       return Response.json(
         {
-          error:
-            "User not found.",
+          error: "User not found.",
         },
         {
           status: 404,
-          headers:
-            responseHeaders(),
+          headers: responseHeaders(),
         },
       );
     }
@@ -388,12 +456,9 @@ export async function PATCH(
       string | number | boolean | null
     > = {};
 
-    if (
-      body.role !== undefined
-    ) {
-      const role =
-        text(body.role);
-
+    let targetRole = existingUser.role;
+    if (body.role !== undefined) {
+      const role = text(body.role);
       if (!role) {
         return Response.json(
           {
@@ -402,27 +467,37 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
           },
         );
       }
-
+      targetRole = role;
       updateData.role = role;
+
+      // Apply role scope config
+      const scopeConfig =
+        getRoleScopeConfig(role);
+      updateData.accessLevel =
+        scopeConfig.accessLevel;
+      updateData.allRanges =
+        scopeConfig.allRanges;
+      updateData.allZones =
+        scopeConfig.allZones;
+      updateData.allDivisions =
+        scopeConfig.allDivisions;
+      updateData.allPoliceStations =
+        scopeConfig.allPoliceStations;
     }
 
     if (
-      body.accessLevel !==
-      undefined
+      body.accessLevel !== undefined &&
+      updateData.accessLevel ===
+        undefined
     ) {
       const parsedAccessLevel =
-        integerValue(
-          body.accessLevel,
-        );
-
+        integerValue(body.accessLevel);
       if (
-        parsedAccessLevel ===
-          null ||
+        parsedAccessLevel === null ||
         parsedAccessLevel < 0
       ) {
         return Response.json(
@@ -432,23 +507,18 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
           },
         );
       }
-
       updateData.accessLevel =
         parsedAccessLevel;
     }
 
-    if (
-      body.status !== undefined
-    ) {
-      const status =
-        text(
-          body.status,
-        ).toUpperCase();
+    if (body.status !== undefined) {
+      const status = text(
+        body.status,
+      ).toUpperCase();
 
       if (
         ![
@@ -463,17 +533,42 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
+          },
+        );
+      }
+
+      updateData.status = status;
+    }
+
+    // Safeguard A: Self-Demotion & Self-Deactivation
+    if (
+      userId ===
+      authorization.session.userId
+    ) {
+      if (
+        body.role !== undefined &&
+        text(
+          body.role,
+        ).toUpperCase() !== "ADMIN"
+      ) {
+        return Response.json(
+          {
+            error:
+              "You cannot demote your own administrator account.",
+          },
+          {
+            status: 400,
+            headers: responseHeaders(),
           },
         );
       }
 
       if (
-        userId ===
-          authorization.session
-            .userId &&
-        status === "INACTIVE"
+        body.status !== undefined &&
+        text(
+          body.status,
+        ).toUpperCase() === "INACTIVE"
       ) {
         return Response.json(
           {
@@ -482,14 +577,116 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
           },
         );
       }
+    }
 
-      updateData.status =
-        status;
+    // Safeguard B: Last Active Admin
+    const isTargetActiveAdmin =
+      (
+        existingUser.role || ""
+      ).toUpperCase() === "ADMIN" &&
+      existingUser.status === "ACTIVE";
+
+    if (isTargetActiveAdmin) {
+      const isDemotion =
+        body.role !== undefined &&
+        text(
+          body.role,
+        ).toUpperCase() !== "ADMIN";
+      const isDeactivation =
+        body.status !== undefined &&
+        text(
+          body.status,
+        ).toUpperCase() === "INACTIVE";
+
+      if (
+        isDemotion ||
+        isDeactivation
+      ) {
+        const activeAdminCount =
+          await prisma.user.count({
+            where: {
+              role: "ADMIN",
+              status: "ACTIVE",
+            },
+          });
+
+        if (activeAdminCount <= 1) {
+          return Response.json(
+            {
+              error:
+                "Cannot demote or deactivate the last active administrator account.",
+            },
+            {
+              status: 400,
+              headers:
+                responseHeaders(),
+            },
+          );
+        }
+      }
+    }
+
+    // Resolve complete parent hierarchy if range/zone/division/ps are supplied
+    const rangeName =
+      body.rangeName !== undefined
+        ? nullableText(body.rangeName)
+        : existingUser.rangeName;
+    const zoneName =
+      body.zoneName !== undefined
+        ? nullableText(body.zoneName)
+        : existingUser.zoneName;
+    const divisionName =
+      body.divisionName !== undefined
+        ? nullableText(
+            body.divisionName,
+          )
+        : existingUser.divisionName;
+    const policeStationName =
+      body.policeStationName !==
+      undefined
+        ? nullableText(
+            body.policeStationName,
+          )
+        : existingUser.policeStationName;
+    const sectorName =
+      body.sectorName !== undefined
+        ? nullableText(body.sectorName)
+        : existingUser.sectorName;
+
+    if (
+      body.rangeName !== undefined ||
+      body.zoneName !== undefined ||
+      body.divisionName !== undefined ||
+      body.policeStationName !==
+        undefined
+    ) {
+      const hierarchy =
+        resolveCompleteParentHierarchy({
+          rangeName,
+          zoneName,
+          divisionName,
+          policeStationName,
+        });
+
+      updateData.commissionerateName =
+        hierarchy.commissionerateName;
+      updateData.rangeName =
+        hierarchy.rangeName;
+      updateData.zoneName =
+        hierarchy.zoneName;
+      updateData.divisionName =
+        hierarchy.divisionName;
+      updateData.policeStationName =
+        hierarchy.policeStationName;
+    }
+
+    if (body.sectorName !== undefined) {
+      updateData.sectorName =
+        sectorName;
     }
 
     if (
@@ -501,73 +698,20 @@ export async function PATCH(
           body.commissionerateCode,
         );
     }
-
-    if (
-      body.commissionerateName !==
-      undefined
-    ) {
-      updateData.commissionerateName =
-        nullableText(
-          body.commissionerateName,
-        );
-    }
-
-    if (
-      body.rangeCode !== undefined
-    ) {
+    if (body.rangeCode !== undefined) {
       updateData.rangeCode =
-        nullableText(
-          body.rangeCode,
-        );
+        nullableText(body.rangeCode);
     }
-
-    if (
-      body.rangeName !== undefined
-    ) {
-      updateData.rangeName =
-        nullableText(
-          body.rangeName,
-        );
-    }
-
-    if (
-      body.zoneCode !== undefined
-    ) {
+    if (body.zoneCode !== undefined) {
       updateData.zoneCode =
-        nullableText(
-          body.zoneCode,
-        );
+        nullableText(body.zoneCode);
     }
-
     if (
-      body.zoneName !== undefined
-    ) {
-      updateData.zoneName =
-        nullableText(
-          body.zoneName,
-        );
-    }
-
-    if (
-      body.divisionCode !==
-      undefined
+      body.divisionCode !== undefined
     ) {
       updateData.divisionCode =
-        nullableText(
-          body.divisionCode,
-        );
+        nullableText(body.divisionCode);
     }
-
-    if (
-      body.divisionName !==
-      undefined
-    ) {
-      updateData.divisionName =
-        nullableText(
-          body.divisionName,
-        );
-    }
-
     if (
       body.policeStationCode !==
       undefined
@@ -577,33 +721,9 @@ export async function PATCH(
           body.policeStationCode,
         );
     }
-
-    if (
-      body.policeStationName !==
-      undefined
-    ) {
-      updateData.policeStationName =
-        nullableText(
-          body.policeStationName,
-        );
-    }
-
-    if (
-      body.sectorCode !== undefined
-    ) {
+    if (body.sectorCode !== undefined) {
       updateData.sectorCode =
-        nullableText(
-          body.sectorCode,
-        );
-    }
-
-    if (
-      body.sectorName !== undefined
-    ) {
-      updateData.sectorName =
-        nullableText(
-          body.sectorName,
-        );
+        nullableText(body.sectorCode);
     }
 
     const booleanFields: Array<{
@@ -612,49 +732,34 @@ export async function PATCH(
         | "allZones"
         | "allDivisions"
         | "allPoliceStations";
-
       value: unknown;
     }> = [
       {
-        requestKey:
-          "allRanges",
-        value:
-          body.allRanges,
+        requestKey: "allRanges",
+        value: body.allRanges,
       },
       {
-        requestKey:
-          "allZones",
-        value:
-          body.allZones,
+        requestKey: "allZones",
+        value: body.allZones,
       },
       {
-        requestKey:
-          "allDivisions",
-        value:
-          body.allDivisions,
+        requestKey: "allDivisions",
+        value: body.allDivisions,
       },
       {
-        requestKey:
-          "allPoliceStations",
-        value:
-          body.allPoliceStations,
+        requestKey: "allPoliceStations",
+        value: body.allPoliceStations,
       },
     ];
 
-    for (
-      const field of
-      booleanFields
-    ) {
-      if (
-        field.value === undefined
-      ) {
+    for (const field of booleanFields) {
+      if (field.value === undefined) {
         continue;
       }
 
-      const parsed =
-        booleanValue(
-          field.value,
-        );
+      const parsed = booleanValue(
+        field.value,
+      );
 
       if (parsed === null) {
         return Response.json(
@@ -663,28 +768,21 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
           },
         );
       }
 
       if (
-        field.requestKey ===
-        "allRanges"
+        field.requestKey === "allRanges"
       ) {
-        updateData.allRanges =
-          parsed;
+        updateData.allRanges = parsed;
       }
-
       if (
-        field.requestKey ===
-        "allZones"
+        field.requestKey === "allZones"
       ) {
-        updateData.allZones =
-          parsed;
+        updateData.allZones = parsed;
       }
-
       if (
         field.requestKey ===
         "allDivisions"
@@ -692,7 +790,6 @@ export async function PATCH(
         updateData.allDivisions =
           parsed;
       }
-
       if (
         field.requestKey ===
         "allPoliceStations"
@@ -706,12 +803,8 @@ export async function PATCH(
       | Array<{
           policeStationCode:
             string | null;
-
-          policeStationName:
-            string;
-
+          policeStationName: string;
           canView: boolean;
-
           canEdit: boolean;
         }>
       | undefined;
@@ -732,32 +825,23 @@ export async function PATCH(
           },
           {
             status: 400,
-            headers:
-              responseHeaders(),
+            headers: responseHeaders(),
           },
         );
       }
 
-      const accessMap =
-        new Map<
-          string,
-          {
-            policeStationCode:
-              string | null;
+      const accessMap = new Map<
+        string,
+        {
+          policeStationCode:
+            string | null;
+          policeStationName: string;
+          canView: boolean;
+          canEdit: boolean;
+        }
+      >();
 
-            policeStationName:
-              string;
-
-            canView: boolean;
-
-            canEdit: boolean;
-          }
-        >();
-
-      for (
-        const item of
-        body.policeStationAccesses
-      ) {
+      for (const item of body.policeStationAccesses) {
         if (!isObject(item)) {
           return Response.json(
             {
@@ -772,12 +856,10 @@ export async function PATCH(
           );
         }
 
-        const policeStationName =
-          text(
-            item.policeStationName,
-          );
+        const policeStationNameInput =
+          text(item.policeStationName);
 
-        if (!policeStationName) {
+        if (!policeStationNameInput) {
           return Response.json(
             {
               error:
@@ -792,16 +874,13 @@ export async function PATCH(
         }
 
         const canView =
-          item.canView ===
-          undefined
+          item.canView === undefined
             ? true
             : booleanValue(
                 item.canView,
               );
-
         const canEdit =
-          item.canEdit ===
-          undefined
+          item.canEdit === undefined
             ? true
             : booleanValue(
                 item.canEdit,
@@ -825,16 +904,14 @@ export async function PATCH(
         }
 
         accessMap.set(
-          policeStationName
-            .toLowerCase(),
+          policeStationNameInput.toLowerCase(),
           {
             policeStationCode:
               nullableText(
                 item.policeStationCode,
               ),
-
-            policeStationName,
-
+            policeStationName:
+              policeStationNameInput,
             canView,
             canEdit,
           },
@@ -842,10 +919,10 @@ export async function PATCH(
       }
 
       policeStationAccesses =
-        Array.from(
-          accessMap.values(),
-        );
+        Array.from(accessMap.values());
     }
+
+    const now = new Date();
 
     const updatedUser =
       await prisma.$transaction(
@@ -855,7 +932,6 @@ export async function PATCH(
               where: {
                 id: userId,
               },
-
               data: updateData,
             });
 
@@ -877,30 +953,77 @@ export async function PATCH(
             ) {
               await tx.userPoliceStationAccess.createMany(
                 {
-                  data:
-                    policeStationAccesses.map(
-                      (
-                        access,
-                      ) => ({
-                        userId,
-
-                        policeStationCode:
-                          access.policeStationCode,
-
-                        policeStationName:
-                          access.policeStationName,
-
-                        canView:
-                          access.canView,
-
-                        canEdit:
-                          access.canEdit,
-                      }),
-                    ),
+                  data: policeStationAccesses.map(
+                    (access) => ({
+                      userId,
+                      policeStationCode:
+                        access.policeStationCode,
+                      policeStationName:
+                        access.policeStationName,
+                      canView:
+                        access.canView,
+                      canEdit:
+                        access.canEdit,
+                    }),
+                  ),
                 },
               );
             }
           }
+
+          // Record ActivityEvent audit trail
+          await tx.activityEvent.create(
+            {
+              data: {
+                userId:
+                  authorization
+                    .adminUser!.id,
+                source: "WEB_ADMIN",
+                eventType:
+                  "USER_ROLE_ASSIGNED",
+                oldValue: {
+                  role: existingUser.role,
+                  accessLevel:
+                    existingUser.accessLevel,
+                  rangeName:
+                    existingUser.rangeName,
+                  zoneName:
+                    existingUser.zoneName,
+                  divisionName:
+                    existingUser.divisionName,
+                  policeStationName:
+                    existingUser.policeStationName,
+                  sectorName:
+                    existingUser.sectorName,
+                  allRanges:
+                    existingUser.allRanges,
+                  allZones:
+                    existingUser.allZones,
+                  allDivisions:
+                    existingUser.allDivisions,
+                  allPoliceStations:
+                    existingUser.allPoliceStations,
+                },
+                newValue: updateData,
+                metadata: {
+                  adminEmployeeId:
+                    authorization
+                      .adminUser!
+                      .employeeId,
+                  adminName:
+                    authorization
+                      .adminUser!.name,
+                  affectedUserId:
+                    existingUser.id,
+                  affectedEmployeeId:
+                    existingUser.employeeId,
+                  affectedName:
+                    existingUser.name,
+                },
+                occurredAt: now,
+              },
+            },
+          );
 
           return updated;
         },
@@ -911,7 +1034,6 @@ export async function PATCH(
         where: {
           id: updatedUser.id,
         },
-
         select: {
           id: true,
 
@@ -926,10 +1048,8 @@ export async function PATCH(
           role: true,
           accessLevel: true,
 
-          commissionerateCode:
-            true,
-          commissionerateName:
-            true,
+          commissionerateCode: true,
+          commissionerateName: true,
 
           rangeCode: true,
           rangeName: true,
@@ -940,24 +1060,20 @@ export async function PATCH(
           divisionCode: true,
           divisionName: true,
 
-          policeStationCode:
-            true,
-          policeStationName:
-            true,
+          policeStationCode: true,
+          policeStationName: true,
 
           sectorCode: true,
           sectorName: true,
 
-          allPoliceStations:
-            true,
+          allPoliceStations: true,
           allDivisions: true,
           allZones: true,
           allRanges: true,
 
           status: true,
 
-          mustChangePassword:
-            true,
+          mustChangePassword: true,
 
           createdAt: true,
           updatedAt: true,
@@ -965,20 +1081,13 @@ export async function PATCH(
           policeStationAccesses: {
             select: {
               id: true,
-
-              policeStationCode:
-                true,
-
-              policeStationName:
-                true,
-
+              policeStationCode: true,
+              policeStationName: true,
               canView: true,
               canEdit: true,
             },
-
             orderBy: {
-              policeStationName:
-                "asc",
+              policeStationName: "asc",
             },
           },
         },
@@ -987,17 +1096,13 @@ export async function PATCH(
     return Response.json(
       {
         success: true,
-
         message:
           "User role and jurisdiction updated successfully.",
-
-        user:
-          refreshedUser,
+        user: refreshedUser,
       },
       {
         status: 200,
-        headers:
-          responseHeaders(),
+        headers: responseHeaders(),
       },
     );
   } catch (error) {
@@ -1013,8 +1118,7 @@ export async function PATCH(
       },
       {
         status: 500,
-        headers:
-          responseHeaders(),
+        headers: responseHeaders(),
       },
     );
   }

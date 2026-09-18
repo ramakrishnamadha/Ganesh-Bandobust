@@ -16,7 +16,7 @@ class GpidQrResult {
 class GpidQrService {
   static final RegExp _gpidPattern = RegExp(r'^[A-Za-z0-9_-]{4,32}$');
   static final RegExp _embeddedLabelPattern = RegExp(
-    r'(?:GPID|MANDAP\s*ID|PANDAL\s*ID|UNIQUE\s*ID|REF|ID)[\s:=#-]+([A-Za-z0-9_-]{4,32})',
+    r'(?:GPID|MANDAP\s*ID|PANDAL\s*ID|UNIQUE\s*ID|REF|ID|APP\s*NO|APPLICATION\s*NO|APPLICATION\s*ID)[\s:=#-]+([A-Za-z0-9_-]{4,32})',
     caseSensitive: false,
   );
 
@@ -48,7 +48,7 @@ class GpidQrService {
       try {
         final decoded = jsonDecode(trimmed);
         if (decoded is Map<String, dynamic>) {
-          final dynamic rawGpid = decoded['gpid'] ?? decoded['unique_id'] ?? decoded['uniqueId'];
+          final dynamic rawGpid = decoded['gpid'] ?? decoded['unique_id'] ?? decoded['uniqueId'] ?? decoded['application_no'] ?? decoded['application_id'] ?? decoded['app_no'];
           if (rawGpid != null) {
             final candidate = rawGpid.toString().trim().toUpperCase();
             if (isValidGpidFormat(candidate)) {
@@ -69,7 +69,7 @@ class GpidQrService {
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       try {
         final uri = Uri.parse(trimmed);
-        final queryGpid = uri.queryParameters['gpid'] ?? uri.queryParameters['id'];
+        final queryGpid = uri.queryParameters['gpid'] ?? uri.queryParameters['id'] ?? uri.queryParameters['application_no'] ?? uri.queryParameters['application_id'] ?? uri.queryParameters['app_no'];
         if (queryGpid != null && isValidGpidFormat(queryGpid)) {
           return GpidQrResult(
             gpid: queryGpid.trim().toUpperCase(),
@@ -82,7 +82,10 @@ class GpidQrService {
         final segments = uri.pathSegments;
         if (segments.isNotEmpty) {
           final last = segments.last.trim();
-          if (isValidGpidFormat(last) && segments.any((s) => s.toLowerCase() == 'gpid')) {
+          if (isValidGpidFormat(last) && segments.any((s) {
+            final sl = s.toLowerCase();
+            return sl == 'gpid' || sl == 'application' || sl == 'application_no' || sl == 'app_no' || sl == 'id' || sl == 'application_id';
+          })) {
             return GpidQrResult(
               gpid: last.toUpperCase(),
               format: 'url',

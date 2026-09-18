@@ -93,12 +93,53 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
   Future<void> _verifyGpid(String candidateGpid) async {
     setState(() {
       _isProcessing = true;
-      _statusMessage = 'Verifying GPID $candidateGpid & jurisdiction...';
+      _statusMessage = 'Resolving scanned ID...';
     });
 
-    // 2. Call server-side jurisdiction validation endpoint
+    // 2a. Resolve the scanned Reference ID to actual GPID
+    // Fetch details from the API where GPIDs are populated at initial launch if needed
+    String actualGpidToVerify = candidateGpid;
+    try {
+      // First check existing local cache
+      List<Map<String, dynamic>> records = await GpidApiService.loadCachedRecords(
+        userId: widget.authenticatedUser.employeeId,
+      );
+
+      Map<String, dynamic> matchingRecord = _findMatchingRecord(records, candidateGpid);
+
+      // If not found in cache, fetch fresh data from the initial launch API
+      if (matchingRecord.isEmpty) {
+        setState(() {
+          _statusMessage = 'Fetching latest records from server...';
+        });
+        
+        records = await GpidApiService.fetchGaneshRecords(
+          userId: widget.authenticatedUser.employeeId,
+          forceNetwork: true,
+        );
+        
+        matchingRecord = _findMatchingRecord(records, candidateGpid);
+      }
+
+      if (matchingRecord.isNotEmpty) {
+        final uniqueId = (matchingRecord['unique_id'] ?? '').toString().trim().toUpperCase();
+        if (uniqueId.isNotEmpty) {
+          actualGpidToVerify = uniqueId;
+        }
+      }
+    } catch (e) {
+      // Proceed with candidateGpid if resolution fails
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _statusMessage = 'Verifying GPID $actualGpidToVerify & jurisdiction...';
+    });
+
+    // 2b. Call server-side jurisdiction validation endpoint
     final verification = await GpidApiService.verifyGpidJurisdiction(
-      gpid: candidateGpid,
+      gpid: actualGpidToVerify,
       user: widget.authenticatedUser,
     );
 
@@ -111,6 +152,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
         final record = verification.record ?? <String, dynamic>{
           'unique_id': candidateGpid,
         };
+        final actualGpid = record['unique_id']?.toString() ?? candidateGpid;
 
         try {
           await _controller.stop();
@@ -127,7 +169,7 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
             context,
             MaterialPageRoute<void>(
               builder: (_) => FestivityCheckScreen(
-                applicationId: candidateGpid,
+                applicationId: actualGpid,
               ),
             ),
           );
@@ -219,6 +261,19 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
         }
         break;
     }
+  }
+
+  Map<String, dynamic> _findMatchingRecord(List<Map<String, dynamic>> records, String targetId) {
+    return records.firstWhere(
+      (r) {
+        final uId = (r['unique_id'] ?? '').toString().trim().toUpperCase();
+        final ref = (r['ref_no'] ?? '').toString().trim().toUpperCase();
+        final appNo = (r['application_no'] ?? '').toString().trim().toUpperCase();
+        final appId = (r['application_id'] ?? '').toString().trim().toUpperCase();
+        return uId == targetId || ref == targetId || appNo == targetId || appId == targetId;
+      },
+      orElse: () => <String, dynamic>{},
+    );
   }
 
   Future<bool> _showNetworkRetryDialog({

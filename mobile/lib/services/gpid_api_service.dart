@@ -561,7 +561,7 @@ class GpidApiService {
     required String gpid,
     AuthenticatedUser? user,
   }) async {
-    final String cleanGpid = gpid.trim().toUpperCase();
+    String cleanGpid = gpid.trim().toUpperCase();
     if (cleanGpid.isEmpty) {
       return const GpidVerificationResult(
         status: GpidVerificationStatus.invalidFormat,
@@ -569,6 +569,30 @@ class GpidApiService {
         isAuthorized: false,
         errorMessage: 'GPID cannot be empty.',
       );
+    }
+
+    // 0. Pre-resolve Application ID to GPID using local cache if possible
+    if (user != null) {
+      try {
+        final cachedRecords = await loadCachedRecords(userId: user.employeeId);
+        final matchingRecord = cachedRecords.firstWhere(
+          (r) {
+            final uId = (r['unique_id'] ?? '').toString().trim().toUpperCase();
+            final ref = (r['ref_no'] ?? '').toString().trim().toUpperCase();
+            final appNo = (r['application_no'] ?? '').toString().trim().toUpperCase();
+            final appId = (r['application_id'] ?? '').toString().trim().toUpperCase();
+            return uId == cleanGpid || ref == cleanGpid || appNo == cleanGpid || appId == cleanGpid;
+          },
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (matchingRecord.isNotEmpty) {
+           final actualGpid = (matchingRecord['unique_id'] ?? '').toString().trim().toUpperCase();
+           if (actualGpid.isNotEmpty && actualGpid != cleanGpid) {
+               cleanGpid = actualGpid; // Resolved App ID to GPID!
+           }
+        }
+      } catch (_) {}
     }
 
     final String? sessionCookie = AuthService.sessionCookie;
@@ -671,10 +695,11 @@ class GpidApiService {
         final cachedRecords = await loadCachedRecords(userId: user.employeeId);
         final matchingRecord = cachedRecords.firstWhere(
           (r) {
-            final uId =
-                (r['unique_id'] ?? '').toString().trim().toUpperCase();
+            final uId = (r['unique_id'] ?? '').toString().trim().toUpperCase();
             final ref = (r['ref_no'] ?? '').toString().trim().toUpperCase();
-            return uId == cleanGpid || ref == cleanGpid;
+            final appNo = (r['application_no'] ?? '').toString().trim().toUpperCase();
+            final appId = (r['application_id'] ?? '').toString().trim().toUpperCase();
+            return uId == cleanGpid || ref == cleanGpid || appNo == cleanGpid || appId == cleanGpid;
           },
           orElse: () => <String, dynamic>{},
         );

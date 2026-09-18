@@ -879,10 +879,11 @@ export default function VisitingsPage() {
   const zoneOptions =
     useMemo(
       () =>
-        getZones(
-          selectedRange ||
-            undefined,
-        ),
+        selectedRange
+          ? getZones(
+              selectedRange,
+            )
+          : [],
       [
         selectedRange,
       ],
@@ -891,13 +892,13 @@ export default function VisitingsPage() {
   const divisionOptions =
     useMemo(
       () =>
-        getDivisions(
-          selectedRange ||
-            undefined,
-
-          selectedZone ||
-            undefined,
-        ),
+        selectedRange &&
+        selectedZone
+          ? getDivisions(
+              selectedRange,
+              selectedZone,
+            )
+          : [],
       [
         selectedRange,
         selectedZone,
@@ -907,16 +908,15 @@ export default function VisitingsPage() {
   const policeStationOptions =
     useMemo(
       () =>
-        getPoliceStations(
-          selectedRange ||
-            undefined,
-
-          selectedZone ||
-            undefined,
-
-          selectedDivision ||
-            undefined,
-        ),
+        selectedRange &&
+        selectedZone &&
+        selectedDivision
+          ? getPoliceStations(
+              selectedRange,
+              selectedZone,
+              selectedDivision,
+            )
+          : [],
       [
         selectedRange,
         selectedZone,
@@ -926,6 +926,15 @@ export default function VisitingsPage() {
 
   const gpidOptions =
     useMemo(() => {
+      if (
+        !selectedRange ||
+        !selectedZone ||
+        !selectedDivision ||
+        !selectedPoliceStation
+      ) {
+        return [];
+      }
+
       const values =
         new Set<string>();
 
@@ -939,7 +948,6 @@ export default function VisitingsPage() {
           );
 
         if (
-          selectedRange &&
           jurisdiction.rangeName !==
             selectedRange
         ) {
@@ -947,7 +955,6 @@ export default function VisitingsPage() {
         }
 
         if (
-          selectedZone &&
           jurisdiction.zoneName !==
             selectedZone
         ) {
@@ -955,7 +962,6 @@ export default function VisitingsPage() {
         }
 
         if (
-          selectedDivision &&
           jurisdiction.divisionName !==
             selectedDivision
         ) {
@@ -963,7 +969,6 @@ export default function VisitingsPage() {
         }
 
         if (
-          selectedPoliceStation &&
           jurisdiction.policeStationName !==
             selectedPoliceStation
         ) {
@@ -1581,6 +1586,9 @@ export default function VisitingsPage() {
                 value={
                   selectedZone
                 }
+                disabled={
+                  !selectedRange
+                }
                 onChange={(
                   event,
                 ) => {
@@ -1600,7 +1608,7 @@ export default function VisitingsPage() {
                     "",
                   );
                 }}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">
                   All Zones
@@ -1628,6 +1636,9 @@ export default function VisitingsPage() {
                 value={
                   selectedDivision
                 }
+                disabled={
+                  !selectedZone
+                }
                 onChange={(
                   event,
                 ) => {
@@ -1643,7 +1654,7 @@ export default function VisitingsPage() {
                     "",
                   );
                 }}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">
                   All Divisions
@@ -1679,6 +1690,9 @@ export default function VisitingsPage() {
                 value={
                   selectedPoliceStation
                 }
+                disabled={
+                  !selectedDivision
+                }
                 onChange={(
                   event,
                 ) => {
@@ -1690,7 +1704,7 @@ export default function VisitingsPage() {
                     "",
                   );
                 }}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">
                   All Police Stations
@@ -1726,6 +1740,9 @@ export default function VisitingsPage() {
                 value={
                   selectedGpid
                 }
+                disabled={
+                  !selectedPoliceStation
+                }
                 onChange={(
                   event,
                 ) =>
@@ -1733,7 +1750,7 @@ export default function VisitingsPage() {
                     event.target.value,
                   )
                 }
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">
                   All GPIDs

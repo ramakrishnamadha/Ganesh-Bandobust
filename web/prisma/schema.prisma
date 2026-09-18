@@ -462,3 +462,160 @@ model FestivityCheckVisit {
   @@index([soundPending])
   @@index([fireSafetyPending])
 }
+
+// ============================================================================
+// PHASE 1: DAILY MANDAP VISITING & TARGET MANAGEMENT
+// ============================================================================
+
+model MandapDailyVisit {
+  id                       String    @id @default(cuid())
+
+  // Officer Snapshot
+  userId                   String
+  officerEmployeeId        String
+  officerName              String
+  officerRank              String    // "PC", "HC", "ASI", "SI", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB"
+  officerRole              String    // "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "SUPERVISORY", "SB"
+
+  // Mandap & Hierarchy Snapshot
+  gpid                     String
+  pandalName               String?
+  commissionerateName      String    @default("Hyderabad")
+  rangeName                String
+  zoneName                 String
+  divisionName             String
+  policeStationName        String
+  sectorName               String?
+  clusterName              String?
+  sensitivity              String    @default("NORMAL") // "NORMAL" | "SENSITIVE" | "HYPERSENSITIVE"
+
+  // Temporal Tracking
+  date                     String    // "YYYY-MM-DD"
+  festivalDay              Int       // 1 to 11
+  visitSequenceForDay      Int       @default(1) // 1 = 1st visit today, 2 = 2nd visit today
+  checkStartedAt           DateTime?
+  checkedAt                DateTime  @default(now())
+
+  // GPS & Geofence Verification
+  latitude                 Float
+  longitude                Float
+  accuracy                 Float?
+  distanceFromMandapMeters Float?
+  isWithinGeofence         Boolean   @default(true)
+
+  // Operational Classification
+  visitType                String    @default("ROUTINE") // "ROUTINE" | "SUPERVISORY" | "DEFICIENCY_RECHECK" | "SPECIAL_BRANCH" | "NIGHT_CHECK" | "EMERGENCY"
+  stage                    String    @default("STAGE_3_FESTIVITY") // "STAGE_1_PRE" | "STAGE_2_INSTALLATION" | "STAGE_3_FESTIVITY" | "STAGE_4_IMMERSION" | "STAGE_5_POST"
+
+  // Findings & Deficiencies
+  remarks                  String?
+  actionTaken              String?
+  evidenceUrls             Json?     // Array of photo URLs
+  hasDeficiency            Boolean   @default(false)
+  deficiencyCategories    Json?     // e.g. ["SOUND_VIOLATION", "FIRE_SAFETY", "VOLUNTEER_ABSENCE"]
+  requiresFollowUp         Boolean   @default(false)
+
+  // Status & Metadata
+  completionStatus         String    @default("COMPLETED")
+  verificationSource       String    @default("QR_SCAN") // "QR_SCAN" | "MAP_SELECTION" | "MANUAL_GPID"
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([gpid, date])
+  @@index([userId, date])
+  @@index([policeStationName, date])
+  @@index([divisionName, date])
+  @@index([zoneName, date])
+  @@index([rangeName, date])
+  @@index([hasDeficiency])
+  @@index([sensitivity])
+}
+
+model DailyVisitTargetRule {
+  id                      String   @id @default(cuid())
+  role                    String   @unique // e.g. "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB_PS", "SB_DIVISION", "SB_ZONE", "SB_NIGHT_CITY"
+  frequencyPerMandap      Int      @default(1) // 2 for Cluster IC, 1 for Sector IC
+  minMandapsPerUnit       Int      @default(0) // 5 per sector for DI, 2 per PS for ACP, 2 per division for Addl DCP, 15 for SB PS
+  scopeLevel              String   // "CLUSTER" | "SECTOR" | "PS" | "DIVISION" | "ZONE" | "COMMISSIONERATE"
+  requiresSensitiveMandap Boolean  @default(false) // true for ACP, Addl DCP, SB
+  shiftType               String   @default("DAY") // "DAY" | "NIGHT"
+  activeFromDay           Int      @default(1)
+  activeToDay             Int      @default(11)
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model GaneshDutyAssignment {
+  id                  String    @id @default(cuid())
+  userId              String
+  officerEmployeeId   String
+  officerName         String
+  officerRank         String
+  assignedRole        String    // "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB"
+
+  // Operational Scope
+  commissionerateName String    @default("Hyderabad")
+  rangeName           String
+  zoneName            String
+  divisionName        String
+  policeStationName   String
+  sectorName          String?
+  clusterName         String?
+  assignedGpids       Json?     // Optional array of specific GPIDs
+
+  // Temporal Validity
+  effectiveFrom       DateTime  @default(now())
+  effectiveTo         DateTime?
+  status              String    @default("ACTIVE") // "ACTIVE" | "ON_LEAVE" | "RELIEVED" | "TRANSFERRED"
+  notes               String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([policeStationName, status])
+  @@index([sectorName, status])
+  @@index([clusterName, status])
+}
+
+model DailyOfficerTargetSummary {
+  id                      String    @id @default(cuid())
+  date                    String    // "YYYY-MM-DD"
+  festivalDay             Int       // 1 to 11
+  userId                  String
+  officerEmployeeId       String
+  officerName             String
+  officerRank             String
+  officerRole             String
+  commissionerateName     String    @default("Hyderabad")
+  rangeName               String
+  zoneName                String
+  divisionName            String
+  policeStationName       String
+  sectorName              String?
+  clusterName             String?
+
+  // Quotas & Progress
+  targetMandapCount       Int       @default(0)
+  targetTotalVisits       Int       @default(0)
+  completedUniqueMandaps  Int       @default(0)
+  completedTotalVisits    Int       @default(0)
+  sensitiveTargetCount    Int       @default(0)
+  sensitiveCompletedCount Int       @default(0)
+  deficienciesReported    Int       @default(0)
+
+  // Status
+  compliancePercentage    Float     @default(0.0)
+  status                  String    @default("DEFICIT") // "COMPLETED" | "ON_TRACK" | "DEFICIT" | "NOT_STARTED"
+  lastVisitedAt           DateTime?
+  calculatedAt            DateTime  @default(now())
+
+  @@unique([date, userId])
+  @@index([date, policeStationName])
+  @@index([date, divisionName])
+  @@index([date, zoneName])
+  @@index([date, rangeName])
+  @@index([date, status])
+}

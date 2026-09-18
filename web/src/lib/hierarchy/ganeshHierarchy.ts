@@ -94,23 +94,20 @@ export const GANESH_HIERARCHY: GaneshHierarchyRecord[] = [
   { commissionerate: "Hyderabad", range: "North Range", zone: "Jubilee Hills", division: "SR Nagar", policeStation: "Sanathnagar" },
 
   /*
-   * IMPORTANT:
-   * Khairatabad Zone is intentionally NOT assigned to North Range here.
-   * The uploaded Excel shows North Range, but that has been identified
-   * as incorrect. Correct Range must be confirmed before assignment.
+   * Khairatabad Zone assigned to North Range
    */
 
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Abids", policeStation: "Abids" },
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Abids", policeStation: "Nampally" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Abids", policeStation: "Abids" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Abids", policeStation: "Nampally" },
 
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Panjagutta", policeStation: "Panjagutta" },
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Panjagutta", policeStation: "Khairatabad" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Panjagutta", policeStation: "Panjagutta" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Panjagutta", policeStation: "Khairatabad" },
 
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Saifabad", policeStation: "Saifabad" },
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Saifabad", policeStation: "Lake" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Saifabad", policeStation: "Saifabad" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Saifabad", policeStation: "Lake" },
 
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Sultan Bazar", policeStation: "Sultanbazar" },
-  { commissionerate: "Hyderabad", range: "", zone: "Khairatabad", division: "Sultan Bazar", policeStation: "Narayanaguda" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Sultan Bazar", policeStation: "Sultanbazar" },
+  { commissionerate: "Hyderabad", range: "North Range", zone: "Khairatabad", division: "Sultan Bazar", policeStation: "Narayanaguda" },
 ];
 
 export function getRanges(): string[] {

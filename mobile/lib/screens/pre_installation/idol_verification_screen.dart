@@ -1,16 +1,23 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../measurement/ar_measurement_screen.dart';
 import '../../models/ar_measurement_result.dart';
+import '../../services/verification_api_service.dart';
 
 class IdolVerificationScreen extends StatefulWidget {
   final String applicationId;
+  final String? gpid;
+  final Map<String, dynamic>? ganeshRecord;
 
   const IdolVerificationScreen({
     super.key,
     required this.applicationId,
+    this.gpid,
+    this.ganeshRecord,
   });
 
   @override
@@ -18,265 +25,114 @@ class IdolVerificationScreen extends StatefulWidget {
       _IdolVerificationScreenState();
 }
 
-class _IdolVerificationScreenState
-    extends State<IdolVerificationScreen> {
+class _IdolVerificationScreenState extends State<IdolVerificationScreen> {
+  final ImagePicker _imagePicker = ImagePicker();
+
   String idolInstalled = '';
-  String purchaseVerified = '';
-  String purchaseWithinPs = '';
-  String dimensionsVerified = '';
+  String idolBroughtFrom = '';
+  String idolMaterial = '';
+  String heightMatches = '';
+  String widthMatches = '';
+  String heightRecordMode = '';
+  String widthRecordMode = '';
+  String basePlatformSafe = '';
 
-  final TextEditingController heightController =
+  XFile? idolImage;
+
+  ArMeasurementResult? heightMeasurement;
+  ArMeasurementResult? widthMeasurement;
+
+  double? idolLatitude;
+  double? idolLongitude;
+  double? idolGpsAccuracy;
+  DateTime? idolPhotoTakenAt;
+
+  final TextEditingController actualHeightFeetController =
+      TextEditingController();
+  final TextEditingController actualHeightInchesController =
       TextEditingController();
 
-  final TextEditingController widthController =
+  final TextEditingController idolWidthFeetController =
+      TextEditingController();
+  final TextEditingController idolWidthInchesController =
       TextEditingController();
 
-  String material = '';
+  final TextEditingController heightRemarksController =
+      TextEditingController();
 
-  String heightMeasurementMethod = '';
-  String widthMeasurementMethod = '';
+  final TextEditingController baseSafetyRemarksController =
+      TextEditingController();
 
-  String? heightEvidenceImagePath;
-  String? widthEvidenceImagePath;
-
-  double? heightLatitude;
-  double? heightLongitude;
-  double? heightGpsAccuracy;
-
-  double? widthLatitude;
-  double? widthLongitude;
-  double? widthGpsAccuracy;
-
-  DateTime? heightMeasuredAt;
-  DateTime? widthMeasuredAt;
-
-  String remarks = '';
+  bool officerConfirmed = false;
+  bool isCapturingPhoto = false;
+  bool isSaving = false;
 
   String errorMessage = '';
   String successMessage = '';
 
+  String get selectedGpid {
+    final value = (widget.gpid ?? widget.applicationId).trim();
+
+    if (value.isNotEmpty) {
+      return value;
+    }
+
+    return widget.applicationId;
+  }
+
+  String get applicantName {
+    return (widget.ganeshRecord?['name'] ?? '-').toString();
+  }
+
+  String get associationName {
+    return (widget.ganeshRecord?['association'] ?? '-').toString();
+  }
+
+  String get policeStation {
+    return (widget.ganeshRecord?['ps_name'] ?? '-').toString();
+  }
+
+  String get declaredIdolHeight {
+    final value = (widget.ganeshRecord?['idol_height'] ?? '')
+        .toString()
+        .trim();
+
+    return value.isEmpty ? 'Not Available' : value;
+  }
+
+  String get declaredIdolWidth {
+    final value = (widget.ganeshRecord?['idol_width'] ??
+            widget.ganeshRecord?['width'] ??
+            '')
+        .toString()
+        .trim();
+
+    return value.isEmpty ? 'Not Available' : value;
+  }
+
+  bool get idolConstructedAtLocation {
+    return idolBroughtFrom == 'CONSTRUCTED_AT_LOCATION';
+  }
+
   @override
   void dispose() {
-    heightController.dispose();
-    widthController.dispose();
+    actualHeightFeetController.dispose();
+    actualHeightInchesController.dispose();
+    idolWidthFeetController.dispose();
+    idolWidthInchesController.dispose();
+    heightRemarksController.dispose();
+    baseSafetyRemarksController.dispose();
     super.dispose();
   }
 
-  /* =========================================================
-     DIGITAL AR MEASUREMENT
-  ========================================================= */
-
-  Future<void> openDigitalMeasurement(
-    String type,
-  ) async {
-    final result =
-        await Navigator.push<ArMeasurementResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ArMeasurementScreen(
-          applicationId: widget.applicationId,
-          measurementType: type,
-        ),
-      ),
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      if (type == 'HEIGHT') {
-        heightController.text =
-            result.valueFeet.toStringAsFixed(2);
-
-        heightMeasurementMethod =
-            result.measurementMethod;
-
-        heightEvidenceImagePath =
-            result.evidenceImagePath;
-
-        heightLatitude =
-            result.latitude;
-
-        heightLongitude =
-            result.longitude;
-
-        heightGpsAccuracy =
-            result.gpsAccuracy;
-
-        heightMeasuredAt =
-            result.measuredAt;
-      }
-
-      if (type == 'WIDTH') {
-        widthController.text =
-            result.valueFeet.toStringAsFixed(2);
-
-        widthMeasurementMethod =
-            result.measurementMethod;
-
-        widthEvidenceImagePath =
-            result.evidenceImagePath;
-
-        widthLatitude =
-            result.latitude;
-
-        widthLongitude =
-            result.longitude;
-
-        widthGpsAccuracy =
-            result.gpsAccuracy;
-
-        widthMeasuredAt =
-            result.measuredAt;
-      }
-
-      successMessage =
-          '$type digitally measured successfully: '
-          '${result.valueFeet.toStringAsFixed(2)} ft';
-    });
-  }
-
-  /* =========================================================
-     SAVE VERIFICATION
-  ========================================================= */
-
-  void saveVerification() {
+  void _clearMessages() {
     setState(() {
       errorMessage = '';
       successMessage = '';
     });
-
-    if (idolInstalled.isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please answer: Idol Installed or Not?';
-      });
-
-      return;
-    }
-
-    if (idolInstalled == 'NO') {
-      if (remarks.trim().isEmpty) {
-        setState(() {
-          errorMessage =
-              'Reason / Remarks are mandatory when Idol Installed is NO.';
-        });
-
-        return;
-      }
-
-      setState(() {
-        successMessage =
-            'Saved as Idol Not Installed and marked for NO / Pending monitoring.';
-      });
-
-      return;
-    }
-
-    if (purchaseVerified.isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please answer: Place of Purchase Verified?';
-      });
-
-      return;
-    }
-
-    if (purchaseVerified == 'NO' &&
-        remarks.trim().isEmpty) {
-      setState(() {
-        errorMessage =
-            'Reason / Remarks are mandatory when Place of Purchase is not verified.';
-      });
-
-      return;
-    }
-
-    if (purchaseWithinPs.isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please answer: Place of Purchase Falls Within This PS Limits?';
-      });
-
-      return;
-    }
-
-    /*
-      IMPORTANT:
-      purchaseWithinPs = NO is allowed
-      WITHOUT mandatory remarks.
-    */
-
-    if (dimensionsVerified.isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please answer: Idol Height, Width and Material Verified?';
-      });
-
-      return;
-    }
-
-    if (dimensionsVerified == 'NO') {
-      if (remarks.trim().isEmpty) {
-        setState(() {
-          errorMessage =
-              'Reason / Remarks are mandatory when Height, Width and Material are not verified.';
-        });
-
-        return;
-      }
-
-      setState(() {
-        successMessage =
-            'Idol verification saved with Height / Width / Material pending.';
-      });
-
-      return;
-    }
-
-    if (heightController.text.trim().isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please enter or digitally measure Idol Height.';
-      });
-
-      return;
-    }
-
-    if (widthController.text.trim().isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please enter or digitally measure Idol Width.';
-      });
-
-      return;
-    }
-
-    if (material.isEmpty) {
-      setState(() {
-        errorMessage =
-            'Please select Idol Material.';
-      });
-
-      return;
-    }
-
-    setState(() {
-      successMessage =
-          'Idol-Based Verification saved successfully.';
-    });
   }
 
-  /* =========================================================
-     YES / NO BUTTONS
-  ========================================================= */
-
-  Widget yesNoButtons({
+  Widget _yesNoButtons({
     required String value,
     required void Function(String) onChanged,
   }) {
@@ -284,35 +140,25 @@ class _IdolVerificationScreenState
       children: [
         Expanded(
           child: FilledButton(
-            onPressed: () {
-              onChanged('YES');
-            },
+            onPressed: () => onChanged('YES'),
             style: FilledButton.styleFrom(
-              backgroundColor: value == 'YES'
-                  ? Colors.green
-                  : const Color(0xFFE2E8F0),
-              foregroundColor: value == 'YES'
-                  ? Colors.white
-                  : Colors.black87,
+              backgroundColor:
+                  value == 'YES' ? Colors.green : const Color(0xFFE2E8F0),
+              foregroundColor:
+                  value == 'YES' ? Colors.white : Colors.black87,
             ),
             child: const Text('YES'),
           ),
         ),
-
         const SizedBox(width: 12),
-
         Expanded(
           child: FilledButton(
-            onPressed: () {
-              onChanged('NO');
-            },
+            onPressed: () => onChanged('NO'),
             style: FilledButton.styleFrom(
-              backgroundColor: value == 'NO'
-                  ? Colors.red
-                  : const Color(0xFFE2E8F0),
-              foregroundColor: value == 'NO'
-                  ? Colors.white
-                  : Colors.black87,
+              backgroundColor:
+                  value == 'NO' ? Colors.red : const Color(0xFFE2E8F0),
+              foregroundColor:
+                  value == 'NO' ? Colors.white : Colors.black87,
             ),
             child: const Text('NO'),
           ),
@@ -321,55 +167,585 @@ class _IdolVerificationScreenState
     );
   }
 
-  /* =========================================================
-     BUILD
-  ========================================================= */
+  Future<Position?> _getCurrentPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      setState(() {
+        errorMessage =
+            'Location service is OFF. Please switch ON GPS and try again.';
+      });
+      return null;
+    }
+
+    permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      setState(() {
+        errorMessage =
+            'Location permission is required to capture the Idol photograph.';
+      });
+      return null;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        errorMessage =
+            'Location permission is permanently denied. Please enable it from App Settings.';
+      });
+      return null;
+    }
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Unable to capture current GPS location.';
+      });
+      return null;
+    }
+  }
+
+  Future<void> _takeIdolPhoto() async {
+    _clearMessages();
+
+    setState(() {
+      isCapturingPhoto = true;
+    });
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        if (mounted) {
+          setState(() {
+            isCapturingPhoto = false;
+          });
+        }
+        return;
+      }
+
+      final position = await _getCurrentPosition();
+
+      if (position == null) {
+        if (mounted) {
+          setState(() {
+            isCapturingPhoto = false;
+          });
+        }
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        idolImage = image;
+        idolLatitude = position.latitude;
+        idolLongitude = position.longitude;
+        idolGpsAccuracy = position.accuracy;
+        idolPhotoTakenAt = DateTime.now();
+        isCapturingPhoto = false;
+
+        successMessage =
+            'Current Idol photograph and GPS location captured successfully.';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isCapturingPhoto = false;
+        errorMessage = 'Unable to capture Idol photograph.';
+      });
+    }
+  }
+
+  bool _validFeetInches({
+    required String feet,
+    required String inches,
+  }) {
+    final feetValue = double.tryParse(feet.trim());
+    final inchesValue = double.tryParse(inches.trim());
+
+    if (feetValue == null || inchesValue == null) {
+      return false;
+    }
+
+    if (feetValue < 0) {
+      return false;
+    }
+
+    if (inchesValue < 0 || inchesValue >= 12) {
+      return false;
+    }
+
+    return true;
+  }
+
+  void _fillFeetInches(
+    double valueFeet,
+    TextEditingController feetController,
+    TextEditingController inchesController,
+  ) {
+    var totalInches = (valueFeet * 12).round();
+    var feet = totalInches ~/ 12;
+    var inches = totalInches % 12;
+
+    if (inches == 12) {
+      feet += 1;
+      inches = 0;
+    }
+
+    feetController.text = feet.toString();
+    inchesController.text = inches.toString();
+  }
+
+  Future<void> _measureHeight() async {
+    final result = await Navigator.push<ArMeasurementResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ArMeasurementScreen(
+          applicationId: selectedGpid,
+          measurementType: 'HEIGHT',
+        ),
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      heightMeasurement = result;
+      heightMatches = '';
+      heightRecordMode = '';
+      heightRemarksController.clear();
+      _fillFeetInches(
+        result.valueFeet,
+        actualHeightFeetController,
+        actualHeightInchesController,
+      );
+      successMessage =
+          'Idol Height measurement received successfully.';
+      errorMessage = '';
+    });
+  }
+
+  Future<void> _measureWidth() async {
+    final result = await Navigator.push<ArMeasurementResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ArMeasurementScreen(
+          applicationId: selectedGpid,
+          measurementType: 'WIDTH',
+        ),
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      widthMeasurement = result;
+      widthMatches = '';
+      widthRecordMode = '';
+      _fillFeetInches(
+        result.valueFeet,
+        idolWidthFeetController,
+        idolWidthInchesController,
+      );
+      successMessage =
+          'Idol Width measurement received successfully.';
+      errorMessage = '';
+    });
+  }
+
+  Map<String, dynamic>? _measurementToMap(
+    ArMeasurementResult? measurement,
+  ) {
+    if (measurement == null) {
+      return null;
+    }
+
+    return {
+      'valueFeet': measurement.valueFeet,
+      'valueMeters': measurement.valueMeters,
+      'startX': measurement.startX,
+      'startY': measurement.startY,
+      'startZ': measurement.startZ,
+      'endX': measurement.endX,
+      'endY': measurement.endY,
+      'endZ': measurement.endZ,
+      'latitude': measurement.latitude,
+      'longitude': measurement.longitude,
+      'gpsAccuracy': measurement.gpsAccuracy,
+      'measuredAt': measurement.measuredAt.toIso8601String(),
+      'measurementType': measurement.measurementType,
+      'measurementMethod': measurement.measurementMethod,
+      'evidenceImagePath': measurement.evidenceImagePath,
+    };
+  }
+
+  Map<String, dynamic> _buildResult() {
+    return {
+      'applicationId': widget.applicationId,
+      'gpid': selectedGpid,
+      'idolInstalled': idolInstalled,
+      'idolBroughtFrom': idolBroughtFrom,
+      'idolConstructedAtLocation': idolConstructedAtLocation,
+      'idolMaterial': idolMaterial,
+      'idolPhotoPath': idolImage?.path,
+      'idolLatitude': idolLatitude,
+      'idolLongitude': idolLongitude,
+      'idolGpsAccuracy': idolGpsAccuracy,
+      'idolPhotoTakenAt': idolPhotoTakenAt?.toIso8601String(),
+      'declaredIdolHeight': declaredIdolHeight,
+      'heightMatches': heightMatches,
+      'heightRecordMode': heightRecordMode,
+      'actualHeightFeet': actualHeightFeetController.text.trim(),
+      'actualHeightInches': actualHeightInchesController.text.trim(),
+      'heightRemarks': heightRemarksController.text.trim(),
+      'heightMeasurement': _measurementToMap(heightMeasurement),
+      'declaredIdolWidth': declaredIdolWidth,
+      'widthMatches': widthMatches,
+      'widthRecordMode': widthRecordMode,
+      'idolWidthFeet': idolWidthFeetController.text.trim(),
+      'idolWidthInches': idolWidthInchesController.text.trim(),
+      'widthMeasurement': _measurementToMap(widthMeasurement),
+      'basePlatformSafe': basePlatformSafe,
+      'baseSafetyRemarks': baseSafetyRemarksController.text.trim(),
+      'officerConfirmed': officerConfirmed,
+      'verifiedAt': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Future<void> _returnAfterSuccessfulSave() async {
+    final result = _buildResult();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+      errorMessage = '';
+      successMessage = '';
+    });
+
+    try {
+      await VerificationApiService.saveModuleResult(
+        applicationId: widget.applicationId,
+        gpid: selectedGpid,
+        moduleKey: 'idolResult',
+        result: result,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isSaving = false;
+        successMessage = idolInstalled == 'NO'
+            ? 'Idol Verification saved successfully. Idol is recorded as Not Installed.'
+            : 'Idol-Based Verification saved successfully for GPID $selectedGpid.';
+      });
+
+      await Future<void>.delayed(
+        const Duration(seconds: 1),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pop(
+        context,
+        result,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isSaving = false;
+        successMessage = '';
+        errorMessage =
+            'Unable to save Idol Verification to the server. '
+            'Please check the network and try again.';
+      });
+    }
+  }
+
+  Future<void> _saveVerification() async {
+    _clearMessages();
+
+    if (idolInstalled.isEmpty) {
+      setState(() {
+        errorMessage = 'Please answer Point 1 - Idol Installed?';
+      });
+      return;
+    }
+
+    if (!officerConfirmed) {
+      setState(() {
+        errorMessage =
+            'Officer Confirmation is mandatory before saving.';
+      });
+      return;
+    }
+
+    if (idolInstalled == 'NO') {
+      await _returnAfterSuccessfulSave();
+      return;
+    }
+
+    if (idolBroughtFrom.isEmpty) {
+      setState(() {
+        errorMessage = 'Please select Point 2 - Idol Brought From.';
+      });
+      return;
+    }
+
+    if (idolMaterial.isEmpty) {
+      setState(() {
+        errorMessage = 'Please select Point 3 - Idol Making Material.';
+      });
+      return;
+    }
+
+    if (idolImage == null ||
+        idolLatitude == null ||
+        idolLongitude == null ||
+        idolGpsAccuracy == null ||
+        idolPhotoTakenAt == null) {
+      setState(() {
+        errorMessage =
+            'Point 4 - Current Idol photograph with GPS is mandatory.';
+      });
+      return;
+    }
+
+    if (heightMeasurement == null) {
+      setState(() {
+        errorMessage =
+            'Point 5 - Measure the actual Idol Height using the Measurement Tool.';
+      });
+      return;
+    }
+
+    if (heightMatches.isEmpty) {
+      setState(() {
+        errorMessage =
+            'Please answer Point 5 - Idol Height Verification.';
+      });
+      return;
+    }
+
+    if (heightMatches == 'NO') {
+      if (heightRecordMode.isEmpty) {
+        setState(() {
+          errorMessage =
+              'Point 5 - Select Automatically or Manually to record the verified Idol Height.';
+        });
+        return;
+      }
+
+      if (!_validFeetInches(
+        feet: actualHeightFeetController.text,
+        inches: actualHeightInchesController.text,
+      )) {
+        setState(() {
+          errorMessage =
+              'Enter valid verified Idol Height in feet and inches. Inches must be below 12.';
+        });
+        return;
+      }
+
+      if (heightRemarksController.text.trim().isEmpty) {
+        setState(() {
+          errorMessage =
+              'Height verification remarks are mandatory when the measured height does not match the declared height.';
+        });
+        return;
+      }
+    }
+
+    if (widthMeasurement == null) {
+      setState(() {
+        errorMessage =
+            'Point 6 - Measure the Idol Width using the Measurement Tool.';
+      });
+      return;
+    }
+
+    if (widthMatches.isEmpty) {
+      setState(() {
+        errorMessage =
+            'Please answer Point 6 - Idol Width Verification.';
+      });
+      return;
+    }
+
+    if (widthMatches == 'NO') {
+      if (widthRecordMode.isEmpty) {
+        setState(() {
+          errorMessage =
+              'Point 6 - Select Automatically or Manually to record the verified Idol Width.';
+        });
+        return;
+      }
+
+      if (!_validFeetInches(
+        feet: idolWidthFeetController.text,
+        inches: idolWidthInchesController.text,
+      )) {
+        setState(() {
+          errorMessage =
+              'Enter valid verified Idol Width in feet and inches. Inches must be below 12.';
+        });
+        return;
+      }
+    }
+
+    if (basePlatformSafe.isEmpty) {
+      setState(() {
+        errorMessage =
+            'Please answer Point 7 - Idol Base / Platform Safety.';
+      });
+      return;
+    }
+
+    if (basePlatformSafe == 'NO' &&
+        baseSafetyRemarksController.text.trim().isEmpty) {
+      setState(() {
+        errorMessage =
+            'Base / Platform safety remarks are mandatory when the answer is NO.';
+      });
+      return;
+    }
+
+    await _returnAfterSuccessfulSave();
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF17365D),
+      ),
+    );
+  }
+
+  Widget _detailRow(
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 135,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Idol-Based Verification'),
+        title: const Text(
+          'Idol-Based Verification',
+        ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.stretch,
-
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            /* APPLICATION DETAILS */
-
             Card(
               child: Padding(
-                padding:
-                    const EdgeInsets.all(16),
-
+                padding: const EdgeInsets.all(16),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Application ID',
+                      'Selected GPID',
                       style: TextStyle(
-                        color:
-                            Color(0xFF64748B),
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-
+                    const SizedBox(height: 4),
                     Text(
-                      widget.applicationId,
+                      selectedGpid,
                       style: const TextStyle(
                         fontSize: 20,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            Color(0xFF17365D),
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF17365D),
                       ),
+                    ),
+                    const Divider(height: 24),
+                    _detailRow(
+                      'Applicant Name',
+                      applicantName,
+                    ),
+                    _detailRow(
+                      'Association',
+                      associationName,
+                    ),
+                    _detailRow(
+                      'Police Station',
+                      policeStation,
+                    ),
+                    _detailRow(
+                      'Declared Height',
+                      declaredIdolHeight,
+                    ),
+                    _detailRow(
+                      'Declared Width',
+                      declaredIdolWidth,
                     ),
                   ],
                 ),
@@ -378,81 +754,61 @@ class _IdolVerificationScreenState
 
             const SizedBox(height: 14),
 
-            /* =================================================
-               POINT 1 — IDOL INSTALLED
-            ================================================= */
-
             Card(
               child: Padding(
-                padding:
-                    const EdgeInsets.all(16),
-
+                padding: const EdgeInsets.all(16),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
-
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Point 1 — Idol Installed or Not?',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
+                    _sectionTitle(
+                      'Point 1 - Idol Installed?',
                     ),
-
                     const SizedBox(height: 14),
-
-                    yesNoButtons(
+                    _yesNoButtons(
                       value: idolInstalled,
-
                       onChanged: (value) {
                         setState(() {
-                          idolInstalled =
-                              value;
+                          idolInstalled = value;
+
+                          if (value == 'NO') {
+                            idolBroughtFrom = '';
+                            idolMaterial = '';
+                            idolImage = null;
+                            idolLatitude = null;
+                            idolLongitude = null;
+                            idolGpsAccuracy = null;
+                            idolPhotoTakenAt = null;
+                            heightMatches = '';
+                            widthMatches = '';
+                            heightRecordMode = '';
+                            widthRecordMode = '';
+                            heightMeasurement = null;
+                            widthMeasurement = null;
+                            actualHeightFeetController.clear();
+                            actualHeightInchesController.clear();
+                            heightRemarksController.clear();
+                            idolWidthFeetController.clear();
+                            idolWidthInchesController.clear();
+                            basePlatformSafe = '';
+                            baseSafetyRemarksController.clear();
+                          }
                         });
                       },
                     ),
-
-                    if (idolInstalled ==
-                        'NO') ...[
-                      const SizedBox(
-                          height: 18),
-
-                      const Text(
-                        'NO-type Reason / Remarks *',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight:
-                              FontWeight.bold,
+                    if (idolInstalled == 'NO') ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      TextField(
-                        maxLines: 4,
-
-                        onChanged: (value) {
-                          remarks = value;
-                        },
-
-                        decoration:
-                            const InputDecoration(
-                          hintText:
-                              'Enter reason why Idol is not installed',
-                          border:
-                              OutlineInputBorder(),
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      const Text(
-                        'Status will be recorded as Idol Not Installed.',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 12,
+                        child: const Text(
+                          'Idol is not installed. Remaining Idol verification points are not required.',
+                          style: TextStyle(
+                            color: Color(0xFF1D4ED8),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -464,674 +820,672 @@ class _IdolVerificationScreenState
             if (idolInstalled == 'YES') ...[
               const SizedBox(height: 14),
 
-              /* =================================================
-                 POINT 2 — PURCHASE VERIFIED
-              ================================================= */
-
               Card(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.all(16),
-
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
-
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Point 2 — Place of Purchase Verified?',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
+                      _sectionTitle(
+                        'Point 2 - Idol Brought From',
                       ),
-
                       const SizedBox(height: 14),
-
-                      yesNoButtons(
-                        value: purchaseVerified,
-
+                      RadioGroup<String>(
+                        groupValue: idolBroughtFrom,
                         onChanged: (value) {
                           setState(() {
-                            purchaseVerified =
-                                value;
+                            idolBroughtFrom = value ?? '';
                           });
                         },
-                      ),
-
-                      if (purchaseVerified ==
-                          'NO') ...[
-                        const SizedBox(
-                            height: 18),
-
-                        const Text(
-                          'NO-type Reason / Remarks *',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
+                        child: const Column(
+                          children: [
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('Outside'),
+                              value: 'OUTSIDE',
+                            ),
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                'Constructed at Location',
+                              ),
+                              value: 'CONSTRUCTED_AT_LOCATION',
+                            ),
+                          ],
                         ),
-
+                      ),
+                      if (idolConstructedAtLocation) ...[
                         const SizedBox(height: 8),
-
-                        TextField(
-                          maxLines: 4,
-
-                          onChanged: (value) {
-                            remarks = value;
-                          },
-
-                          decoration:
-                              const InputDecoration(
-                            hintText:
-                                'Enter reason',
-                            border:
-                                OutlineInputBorder(),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              /* =================================================
-                 POINT 3 — PURCHASE WITHIN PS
-              ================================================= */
-
-              Card(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.all(16),
-
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
-
-                    children: [
-                      const Text(
-                        'Point 3 — Place of Purchase Falls Within This PS Limits?',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      yesNoButtons(
-                        value: purchaseWithinPs,
-
-                        onChanged: (value) {
-                          setState(() {
-                            purchaseWithinPs =
-                                value;
-                          });
-                        },
-                      ),
-
-                      if (purchaseWithinPs ==
-                          'NO') ...[
-                        const SizedBox(
-                            height: 14),
-
                         Container(
-                          padding:
-                              const EdgeInsets
-                                  .all(12),
-
-                          decoration:
-                              BoxDecoration(
-                            color: const Color(
-                                0xFFEFF6FF),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(10),
-                          ),
-
-                          child: const Text(
-                            'Purchase location is outside this Police Station limits. This NO does not require mandatory NO-type remarks.',
-                            style: TextStyle(
-                              color:
-                                  Color(
-                                      0xFF1D4ED8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              /* =================================================
-                 POINT 4 — HEIGHT / WIDTH / MATERIAL
-              ================================================= */
-
-              Card(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.all(16),
-
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
-
-                    children: [
-                      const Text(
-                        'Point 4 — Idol Height, Width and Material Verified?',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      yesNoButtons(
-                        value:
-                            dimensionsVerified,
-
-                        onChanged: (value) {
-                          setState(() {
-                            dimensionsVerified =
-                                value;
-                          });
-                        },
-                      ),
-
-                      if (dimensionsVerified ==
-                          'YES') ...[
-                        const SizedBox(
-                            height: 20),
-
-                        /* =========================================
-                           AR MEASUREMENT
-                        ========================================= */
-
-                        Container(
-                          padding:
-                              const EdgeInsets
-                                  .all(16),
-
-                          decoration:
-                              BoxDecoration(
-                            color: const Color(
-                                0xFFEFF6FF),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7ED),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: const Color(
-                                  0xFFBFDBFE),
+                              color: const Color(0xFFFED7AA),
                             ),
                           ),
+                          child: const Text(
+                            'Route-Based Verification will require confirmation whether the procession route has been verified for this Idol.',
+                            style: TextStyle(
+                              color: Color(0xFF9A3412),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
 
+              const SizedBox(height: 14),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(
+                        'Point 3 - Idol Making Material',
+                      ),
+                      const SizedBox(height: 14),
+                      RadioGroup<String>(
+                        groupValue: idolMaterial,
+                        onChanged: (value) {
+                          setState(() {
+                            idolMaterial = value ?? '';
+                          });
+                        },
+                        child: const Column(
+                          children: [
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                'POP (Plaster of Paris)',
+                              ),
+                              value: 'POP',
+                            ),
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('Clay'),
+                              value: 'CLAY',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(
+                        'Point 4 - Take Current Photograph of Idol',
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Photograph must be taken directly through the mobile camera. Current GPS location, accuracy and date/time will be captured automatically.',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      FilledButton.icon(
+                        onPressed:
+                            isCapturingPhoto ? null : _takeIdolPhoto,
+                        icon: isCapturingPhoto
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.camera_alt_outlined,
+                              ),
+                        label: Text(
+                          isCapturingPhoto
+                              ? 'Capturing...'
+                              : idolImage == null
+                                  ? 'OPEN CAMERA'
+                                  : 'RETAKE IDOL PHOTO',
+                        ),
+                      ),
+
+                      if (idolImage != null) ...[
+                        const SizedBox(height: 14),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(idolImage!.path),
+                            height: 280,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _detailRow(
+                          'Latitude',
+                          idolLatitude?.toStringAsFixed(6) ?? '-',
+                        ),
+                        _detailRow(
+                          'Longitude',
+                          idolLongitude?.toStringAsFixed(6) ?? '-',
+                        ),
+                        _detailRow(
+                          'GPS Accuracy',
+                          idolGpsAccuracy == null
+                              ? '-'
+                              : '+/-${idolGpsAccuracy!.toStringAsFixed(1)} m',
+                        ),
+                        _detailRow(
+                          'Date & Time',
+                          idolPhotoTakenAt?.toLocal().toString() ?? '-',
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(
+                        'Point 5 - Idol Height Verification',
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Declared Idol Height',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              declaredIdolHeight,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF17365D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _measureHeight,
+                        icon: const Icon(Icons.straighten),
+                        label: Text(
+                          heightMeasurement == null
+                              ? 'MEASURE IDOL HEIGHT'
+                              : 'RE-MEASURE IDOL HEIGHT',
+                        ),
+                      ),
+                      if (heightMeasurement != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .stretch,
-
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Digital AR Measurement',
+                                'Digitally Measured Idol Height',
                                 style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  color:
-                                      Color(
-                                          0xFF17365D),
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF166534),
                                 ),
                               ),
-
-                              const SizedBox(
-                                  height: 5),
-
-                              const Text(
-                                'Use the mobile device camera and ARKit / ARCore to measure the Idol.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color:
-                                      Color(
-                                          0xFF475569),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${actualHeightFeetController.text} ft '
+                                '${actualHeightInchesController.text} in',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF166534),
                                 ),
                               ),
-
-                              const SizedBox(
-                                  height: 14),
-
-                              FilledButton.icon(
-                                onPressed: () {
-                                  openDigitalMeasurement(
-                                    'HEIGHT',
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.height,
-                                ),
-                                label: const Text(
-                                  'Measure Height Digitally',
-                                ),
-                              ),
-
-                              const SizedBox(
-                                  height: 10),
-
-                              FilledButton.icon(
-                                onPressed: () {
-                                  openDigitalMeasurement(
-                                    'WIDTH',
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.swap_horiz,
-                                ),
-                                label: const Text(
-                                  'Measure Width Digitally',
-                                ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${heightMeasurement!.valueMeters.toStringAsFixed(3)} metres',
                               ),
                             ],
                           ),
                         ),
-
-                        const SizedBox(
-                            height: 18),
-
-                        /* HEIGHT */
-
-                        TextField(
-                          controller:
-                              heightController,
-
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
-                            decimal: true,
-                          ),
-
-                          onChanged: (value) {
-                            if (value
-                                .trim()
-                                .isNotEmpty) {
-                              setState(() {
-                                heightMeasurementMethod =
-                                    'MANUAL';
-                              });
-                            }
-                          },
-
-                          decoration:
-                              InputDecoration(
-                            labelText:
-                                'Height (ft.) *',
-
-                            border:
-                                const OutlineInputBorder(),
-
-                            suffixIcon:
-                                heightMeasurementMethod ==
-                                        'AR_3D_HIT_TEST'
-                                    ? const Icon(
-                                        Icons
-                                            .verified,
-                                        color: Colors
-                                            .green,
-                                      )
-                                    : null,
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Does the measured height approximately match the declared height?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-
-                        if (heightMeasurementMethod
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                              height: 5),
-
-                          Text(
-                            'Measurement Method: $heightMeasurementMethod',
-                            style:
-                                const TextStyle(
-                              fontSize: 12,
-                              color: Color(
-                                  0xFF64748B),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(
-                            height: 16),
-
-                        /* WIDTH */
-
-                        TextField(
-                          controller:
-                              widthController,
-
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
-                            decimal: true,
-                          ),
-
-                          onChanged: (value) {
-                            if (value
-                                .trim()
-                                .isNotEmpty) {
-                              setState(() {
-                                widthMeasurementMethod =
-                                    'MANUAL';
-                              });
-                            }
-                          },
-
-                          decoration:
-                              InputDecoration(
-                            labelText:
-                                'Width (ft.) *',
-
-                            border:
-                                const OutlineInputBorder(),
-
-                            suffixIcon:
-                                widthMeasurementMethod ==
-                                        'AR_3D_HIT_TEST'
-                                    ? const Icon(
-                                        Icons
-                                            .verified,
-                                        color: Colors
-                                            .green,
-                                      )
-                                    : null,
-                          ),
-                        ),
-
-                        if (widthMeasurementMethod
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                              height: 5),
-
-                          Text(
-                            'Measurement Method: $widthMeasurementMethod',
-                            style:
-                                const TextStyle(
-                              fontSize: 12,
-                              color: Color(
-                                  0xFF64748B),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(
-                            height: 16),
-
-                        /* MATERIAL */
-
-                        DropdownButtonFormField<
-                            String>(
-                          initialValue:
-                              material.isEmpty
-                                  ? null
-                                  : material,
-
-                          decoration:
-                              const InputDecoration(
-                            labelText:
-                                'Material *',
-                            border:
-                                OutlineInputBorder(),
-                          ),
-
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'CLAY',
-                              child:
-                                  Text('Clay'),
-                            ),
-
-                            DropdownMenuItem(
-                              value: 'POP',
-                              child:
-                                  Text('POP'),
-                            ),
-                          ],
-
+                        const SizedBox(height: 12),
+                        _yesNoButtons(
+                          value: heightMatches,
                           onChanged: (value) {
                             setState(() {
-                              material =
-                                  value ?? '';
+                              heightMatches = value;
+                              heightRecordMode = '';
+                              heightRemarksController.clear();
+
+                              if (value == 'YES') {
+                                actualHeightFeetController.clear();
+                                actualHeightInchesController.clear();
+                              } else if (heightMeasurement != null) {
+                                _fillFeetInches(
+                                  heightMeasurement!.valueFeet,
+                                  actualHeightFeetController,
+                                  actualHeightInchesController,
+                                );
+                              }
                             });
                           },
                         ),
-
-                        const SizedBox(
-                            height: 18),
-
-                        /* =========================================
-                           MEASUREMENT EVIDENCE
-                        ========================================= */
-
-                        Container(
-                          padding:
-                              const EdgeInsets
-                                  .all(14),
-
-                          decoration:
-                              BoxDecoration(
-                            color: const Color(
-                                0xFFF8FAFC),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(10),
-                            border: Border.all(
-                              color: const Color(
-                                  0xFFE2E8F0),
+                        if (heightMatches == 'YES') ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Declared Height ($declaredIdolHeight) will be used as the final Idol Height for further reference.',
+                              style: const TextStyle(
+                                color: Color(0xFF1D4ED8),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
+                        ],
+                        if (heightMatches == 'NO') ...[
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                heightRecordMode.isEmpty ? null : heightRecordMode,
+                            decoration: const InputDecoration(
+                              labelText: 'Record Verified Height *',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'AUTOMATICALLY',
+                                child: Text('Automatically'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'MANUALLY',
+                                child: Text('Manually'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                heightRecordMode = value ?? '';
 
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .stretch,
+                                if (heightRecordMode == 'AUTOMATICALLY' &&
+                                    heightMeasurement != null) {
+                                  _fillFeetInches(
+                                    heightMeasurement!.valueFeet,
+                                    actualHeightFeetController,
+                                    actualHeightInchesController,
+                                  );
+                                } else if (heightRecordMode == 'MANUALLY') {
+                                  actualHeightFeetController.clear();
+                                  actualHeightInchesController.clear();
+                                }
+                              });
+                            },
+                          ),
+                          if (heightRecordMode.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: actualHeightFeetController,
+                                    readOnly:
+                                        heightRecordMode == 'AUTOMATICALLY',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Feet',
+                                      border: const OutlineInputBorder(),
+                                      filled:
+                                          heightRecordMode == 'AUTOMATICALLY',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: actualHeightInchesController,
+                                    readOnly:
+                                        heightRecordMode == 'AUTOMATICALLY',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Inches',
+                                      border: const OutlineInputBorder(),
+                                      filled:
+                                          heightRecordMode == 'AUTOMATICALLY',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: heightRemarksController,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              labelText: 'Remarks *',
+                              hintText:
+                                  'Enter reason / difference in Idol height',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
 
-                            children: [
-                              const Text(
-                                'Measurement Evidence',
+              const SizedBox(height: 14),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(
+                        'Point 6 - Idol Width Verification',
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Declared Idol Width',
                                 style: TextStyle(
-                                  fontWeight:
-                                      FontWeight
-                                          .bold,
-                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
                                 ),
                               ),
-
-                              const SizedBox(height: 12),
-
-                              if (heightEvidenceImagePath !=
-                                  null) ...[
-                                const Text(
-                                  'Height Evidence',
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
+                            ),
+                            Text(
+                              declaredIdolWidth,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF17365D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _measureWidth,
+                        icon: const Icon(Icons.straighten),
+                        label: Text(
+                          widthMeasurement == null
+                              ? 'MEASURE IDOL WIDTH'
+                              : 'RE-MEASURE IDOL WIDTH',
+                        ),
+                      ),
+                      if (widthMeasurement != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Digitally Measured Idol Width',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF166534),
                                 ),
-
-                                const SizedBox(height: 8),
-
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                              10),
-
-                                  child: Image.file(
-                                    File(
-                                      heightEvidenceImagePath!,
-                                    ),
-
-                                    height: 220,
-                                    width:
-                                        double.infinity,
-                                    fit:
-                                        BoxFit.cover,
-                                  ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${idolWidthFeetController.text} ft '
+                                '${idolWidthInchesController.text} in',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF166534),
                                 ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  'Height: ${heightController.text} ft',
-                                  style:
-                                      const TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                Text(
-                                  'Method: ${heightMeasurementMethod.isEmpty ? '-' : heightMeasurementMethod}',
-                                ),
-
-                                Text(
-                                  'GPS: '
-                                  '${heightLatitude?.toStringAsFixed(6) ?? '-'}, '
-                                  '${heightLongitude?.toStringAsFixed(6) ?? '-'}',
-                                ),
-
-                                Text(
-                                  'GPS Accuracy: '
-                                  '${heightGpsAccuracy == null ? '-' : '±${heightGpsAccuracy!.toStringAsFixed(1)} m'}',
-                                ),
-
-                                Text(
-                                  'Measured At: '
-                                  '${heightMeasuredAt?.toLocal().toString() ?? '-'}',
-                                ),
-
-                                const SizedBox(height: 18),
-                              ],
-
-                              if (widthEvidenceImagePath !=
-                                  null) ...[
-                                const Text(
-                                  'Width Evidence',
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                              10),
-
-                                  child: Image.file(
-                                    File(
-                                      widthEvidenceImagePath!,
-                                    ),
-
-                                    height: 220,
-                                    width:
-                                        double.infinity,
-                                    fit:
-                                        BoxFit.cover,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  'Width: ${widthController.text} ft',
-                                  style:
-                                      const TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                Text(
-                                  'Method: ${widthMeasurementMethod.isEmpty ? '-' : widthMeasurementMethod}',
-                                ),
-
-                                Text(
-                                  'GPS: '
-                                  '${widthLatitude?.toStringAsFixed(6) ?? '-'}, '
-                                  '${widthLongitude?.toStringAsFixed(6) ?? '-'}',
-                                ),
-
-                                Text(
-                                  'GPS Accuracy: '
-                                  '${widthGpsAccuracy == null ? '-' : '±${widthGpsAccuracy!.toStringAsFixed(1)} m'}',
-                                ),
-
-                                Text(
-                                  'Measured At: '
-                                  '${widthMeasuredAt?.toLocal().toString() ?? '-'}',
-                                ),
-                              ],
-
-                              if (heightEvidenceImagePath ==
-                                      null &&
-                                  widthEvidenceImagePath ==
-                                      null)
-                                const Text(
-                                  'No AR measurement evidence captured yet.',
-                                  style: TextStyle(
-                                    color:
-                                        Color(
-                                            0xFF64748B),
-                                  ),
-                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${widthMeasurement!.valueMeters.toStringAsFixed(3)} metres',
+                              ),
                             ],
                           ),
                         ),
-                      ],
-
-                      if (dimensionsVerified ==
-                          'NO') ...[
-                        const SizedBox(
-                            height: 18),
-
+                        const SizedBox(height: 16),
                         const Text(
-                          'NO-type Reason / Remarks *',
+                          'Does the measured width approximately match the declared width?',
                           style: TextStyle(
-                            color: Colors.red,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-
-                        const SizedBox(height: 8),
-
-                        TextField(
-                          maxLines: 4,
-
+                        const SizedBox(height: 12),
+                        _yesNoButtons(
+                          value: widthMatches,
                           onChanged: (value) {
-                            remarks = value;
-                          },
+                            setState(() {
+                              widthMatches = value;
+                              widthRecordMode = '';
 
-                          decoration:
-                              const InputDecoration(
+                              if (value == 'YES') {
+                                idolWidthFeetController.clear();
+                                idolWidthInchesController.clear();
+                              } else if (widthMeasurement != null) {
+                                _fillFeetInches(
+                                  widthMeasurement!.valueFeet,
+                                  idolWidthFeetController,
+                                  idolWidthInchesController,
+                                );
+                              }
+                            });
+                          },
+                        ),
+                        if (widthMatches == 'YES') ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Declared Width ($declaredIdolWidth) will be used as the final Idol Width for further reference.',
+                              style: const TextStyle(
+                                color: Color(0xFF1D4ED8),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (widthMatches == 'NO') ...[
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                widthRecordMode.isEmpty ? null : widthRecordMode,
+                            decoration: const InputDecoration(
+                              labelText: 'Record Verified Width *',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'AUTOMATICALLY',
+                                child: Text('Automatically'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'MANUALLY',
+                                child: Text('Manually'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                widthRecordMode = value ?? '';
+
+                                if (widthRecordMode == 'AUTOMATICALLY' &&
+                                    widthMeasurement != null) {
+                                  _fillFeetInches(
+                                    widthMeasurement!.valueFeet,
+                                    idolWidthFeetController,
+                                    idolWidthInchesController,
+                                  );
+                                } else if (widthRecordMode == 'MANUALLY') {
+                                  idolWidthFeetController.clear();
+                                  idolWidthInchesController.clear();
+                                }
+                              });
+                            },
+                          ),
+                          if (widthRecordMode.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: idolWidthFeetController,
+                                    readOnly:
+                                        widthRecordMode == 'AUTOMATICALLY',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Feet',
+                                      border: const OutlineInputBorder(),
+                                      filled:
+                                          widthRecordMode == 'AUTOMATICALLY',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: idolWidthInchesController,
+                                    readOnly:
+                                        widthRecordMode == 'AUTOMATICALLY',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Inches',
+                                      border: const OutlineInputBorder(),
+                                      filled:
+                                          widthRecordMode == 'AUTOMATICALLY',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(
+                        'Point 7 - Idol Base / Platform Safety',
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Is the Base / Platform on which the Idol is installed stable and safe?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _yesNoButtons(
+                        value: basePlatformSafe,
+                        onChanged: (value) {
+                          setState(() {
+                            basePlatformSafe = value;
+
+                            if (value == 'YES') {
+                              baseSafetyRemarksController.clear();
+                            }
+                          });
+                        },
+                      ),
+                      if (basePlatformSafe == 'NO') ...[
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: baseSafetyRemarksController,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Remarks / Details of Safety Issue *',
                             hintText:
-                                'Enter reason',
-                            border:
-                                OutlineInputBorder(),
+                                'Enter details of the unsafe base / platform',
+                            border: OutlineInputBorder(),
                           ),
                         ),
                       ],
@@ -1141,85 +1495,118 @@ class _IdolVerificationScreenState
               ),
             ],
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            /* ERROR */
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity:
+                      ListTileControlAffinity.leading,
+                  value: officerConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      officerConfirmed = value ?? false;
+                    });
+                  },
+                  title: Text(
+                    idolInstalled == 'NO'
+                        ? 'Point 2 - Officer Confirmation'
+                        : 'Point 8 - Officer Confirmation',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF17365D),
+                    ),
+                  ),
+                  subtitle: const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'I have personally verified the Idol and confirm that the above information is correct.',
+                      style: TextStyle(
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             if (errorMessage.isNotEmpty)
               Container(
-                padding:
-                    const EdgeInsets.all(12),
-
-                margin:
-                    const EdgeInsets.only(
-                  bottom: 12,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(0xFFFEE2E2),
-
-                  borderRadius:
-                      BorderRadius.circular(
-                          10),
-                ),
-
                 child: Text(
                   errorMessage,
                   style: const TextStyle(
                     color: Colors.red,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
 
-            /* SUCCESS */
-
             if (successMessage.isNotEmpty)
               Container(
-                padding:
-                    const EdgeInsets.all(12),
-
-                margin:
-                    const EdgeInsets.only(
-                  bottom: 12,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(0xFFDCFCE7),
-
-                  borderRadius:
-                      BorderRadius.circular(
-                          10),
-                ),
-
                 child: Text(
                   successMessage,
                   style: const TextStyle(
                     color: Colors.green,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
 
-            /* SAVE */
-
-            FilledButton.icon(
-              onPressed:
-                  saveVerification,
-
-              icon: const Icon(
-                Icons.save_outlined,
-              ),
-
-              label: const Text(
-                'Save Idol Verification',
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isSaving
+                        ? null
+                        : () {
+                            Navigator.pop(context);
+                          },
+                    child: const Text('CANCEL'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    onPressed:
+                        isSaving ? null : _saveVerification,
+                    icon: isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.verified_outlined,
+                          ),
+                    label: Text(
+                      isSaving
+                          ? 'SAVING...'
+                          : 'CONFIRM & SAVE',
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 30),

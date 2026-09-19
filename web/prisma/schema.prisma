@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  employeeId            String    @unique
+  username              String    @unique
+  passwordHash          String
+  name                  String
+  rank                  String
+  phoneNumber           String?
+  team                  String?
+  role                  String
+  accessLevel           Int
+  mustChangePassword    Boolean   @default(true)
+  commissionerateCode   String?
+  commissionerateName   String?
+  rangeCode             String?
+  rangeName             String?
+  zoneCode              String?
+  zoneName              String?
+  divisionCode          String?
+  divisionName          String?
+  policeStationCode     String?
+  policeStationName     String?
+  sectorCode            String?
+  sectorName            String?
+  allPoliceStations     Boolean   @default(false)
+  allDivisions          Boolean   @default(false)
+  allZones              Boolean   @default(false)
+  allRanges             Boolean   @default(false)
+  status                String    @default("ACTIVE")
+  lastPasswordChangedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  policeStationAccesses UserPoliceStationAccess[]
+
+  @@index([employeeId])
+  @@index([username])
+  @@index([role])
+  @@index([accessLevel])
+  @@index([rangeCode])
+  @@index([zoneCode])
+  @@index([divisionCode])
+  @@index([policeStationCode])
+  @@index([sectorCode])
+  @@index([status])
+}
+
+model UserPoliceStationAccess {
+  id                String   @id @default(cuid())
+  userId            String
+  policeStationCode String?
+  policeStationName String
+  canView           Boolean  @default(true)
+  canEdit           Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, policeStationName])
+  @@index([userId])
+  @@index([policeStationCode])
+  @@index([policeStationName])
+}
+
+model PreInstallationVerification {
+  id                        Int      @id @default(autoincrement())
+  gpid                      String   @unique
+  applicationId             String?
+  locationResult            Json?
+  mandapResult              Json?
+  idolResult                Json?
+  routeResult               Json?
+  securityResult            Json?
+  organizerResult           Json?
+  interDepartmentalResult   Json?
+  permissionShoReviewResult Json?
+  verificationStatus        String   @default("COMPLETED")
+  submittedAt               DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model UserSession {
+  id                  String    @id @default(cuid())
+  userId              String
+  userName            String?
+  rank                String?
+  role                String?
+  source              String
+  commissionerateCode String?
+  rangeCode           String?
+  zoneCode            String?
+  divisionCode        String?
+  policeStationCode   String?
+  sectorCode          String?
+  status              String    @default("ACTIVE")
+  loginAt             DateTime  @default(now())
+  logoutAt            DateTime?
+  lastSeenAt          DateTime  @default(now())
+
+  deviceSessions DeviceSession[]
+  activityEvents ActivityEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([policeStationCode])
+  @@index([sectorCode])
+  @@index([lastSeenAt])
+}
+
+model DeviceSession {
+  id              String    @id @default(cuid())
+  userSessionId   String
+  userId          String
+  deviceType      String
+  deviceId        String?
+  deviceName      String?
+  manufacturer    String?
+  model           String?
+  platform        String?
+  osVersion       String?
+  appVersion      String?
+  trackingStatus  String    @default("TRACKING_STOPPED")
+  trackingEnabled Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  endedAt         DateTime?
+
+  userSession     UserSession              @relation(fields: [userSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  currentLocation OfficerCurrentLocation?
+  locationHistory OfficerLocationHistory[]
+  activityEvents  ActivityEvent[]
+
+  @@index([userSessionId])
+  @@index([userId])
+  @@index([deviceType])
+  @@index([trackingStatus])
+  @@index([lastSeenAt])
+}
+
+model OfficerCurrentLocation {
+  id              String   @id @default(cuid())
+  deviceSessionId String   @unique
+  userId          String
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  speed           Float?
+  heading         Float?
+  batteryLevel    Int?
+  locationSource  String
+  activityStatus  String?
+  activeGpid      String?
+  capturedAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  deviceSession DeviceSession @relation(fields: [deviceSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([capturedAt])
+  @@index([activityStatus])
+  @@index([activeGpid])
+}
+
+model OfficerLocationHistory {
+  id              String   @id @default(cuid())
+  deviceSessionId String
+  userId          String
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  speed           Float?
+  heading         Float?
+  batteryLevel    Int?
+  locationSource  String
+  eventType       String   @default("HEARTBEAT")
+  activeGpid      String?
+  capturedAt      DateTime
+  receivedAt      DateTime @default(now())
+
+  deviceSession DeviceSession @relation(fields: [deviceSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([deviceSessionId, capturedAt])
+  @@index([userId, capturedAt])
+  @@index([eventType])
+  @@index([activeGpid])
+}
+
+model ActivityEvent {
+  id                  String   @id @default(cuid())
+  userId              String
+  userSessionId       String?
+  deviceSessionId     String?
+  source              String
+  eventType           String
+  gpid                String?
+  applicationId       String?
+  commissionerateCode String?
+  rangeCode           String?
+  zoneCode            String?
+  divisionCode        String?
+  policeStationCode   String?
+  sectorCode          String?
+  latitude            Float?
+  longitude           Float?
+  accuracy            Float?
+  oldValue            Json?
+  newValue            Json?
+  metadata            Json?
+  occurredAt          DateTime
+  createdAt           DateTime @default(now())
+
+  userSession   UserSession?   @relation(fields: [userSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  deviceSession DeviceSession? @relation(fields: [deviceSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, occurredAt])
+  @@index([eventType])
+  @@index([gpid, occurredAt])
+  @@index([policeStationCode])
+  @@index([sectorCode])
+  @@index([createdAt])
+}
+
+model InstallationCheckVisit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Checking officer snapshot
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+  clusterCode         String?
+  clusterName         String?
+
+  // Visit
+  stage           String  @default("INSTALLATION")
+  checkSource     String?
+  userSessionId   String?
+  deviceSessionId String?
+
+  // Legacy Installation/CHECKING prototype modules - retained for existing records
+  installationResult    Json?
+  volunteerResult       Json?
+  lightingResult        Json?
+  sanitationResult      Json?
+  poojaResult           Json?
+  antiDesecrationResult Json?
+
+  // Final Stage-2 Installation verification modules
+  idolInstallationResult      Json?
+  geoTaggedVerificationResult Json?
+  clusterSectorResult         Json?
+  documentarySetupResult      Json?
+  prePlannedSetupResult       Json?
+  spectacularExhibitionResult Json?
+
+  // Evidence / observations
+  evidenceResult Json?
+  remarks        String?
+  actionTaken    String?
+
+  // Operational status
+  status           String  @default("SAVED")
+  hasDeficiency    Boolean @default(false)
+  requiresFollowUp Boolean @default(false)
+
+  // Pooja follow-up
+  poojaApplicable Boolean  @default(false)
+  poojaCompleted  Boolean?
+  poojaPending    Boolean  @default(false)
+
+  // GPS
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Timing
+  checkStartedAt DateTime?
+  checkedAt      DateTime  @default(now())
+  submittedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([gpid])
+  @@index([gpid, checkedAt])
+  @@index([userId, checkedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([status])
+  @@index([hasDeficiency])
+  @@index([requiresFollowUp])
+  @@index([poojaPending])
+}
+
+model PreInstallationModuleAudit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Module that was submitted
+  moduleName   String
+  moduleResult Json?
+
+  // Officer snapshot at the time of submission
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+
+  // Source/session
+  source          String  @default("MOBILE")
+  userSessionId   String?
+  deviceSessionId String?
+
+  // GPS when supplied by the module
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Audit timing
+  submittedAt DateTime @default(now())
+
+  @@index([gpid])
+  @@index([gpid, moduleName])
+  @@index([gpid, submittedAt])
+  @@index([userId, submittedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([moduleName])
+}
+
+model FestivityCheckVisit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Stage 3 festival day/date
+  festivalDay  Int
+  festivalDate DateTime
+
+  // Checking officer snapshot
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+  clusterCode         String?
+  clusterName         String?
+
+  // Stage 3 modules
+  antiDigressionResult Json?
+  volunteerResult      Json?
+  lightingResult       Json?
+  sanitationResult     Json?
+  poojaResult          Json?
+  soundSystemResult    Json?
+  fireSafetyResult     Json?
+
+  // Evidence / observations
+  evidenceResult Json?
+  remarks        String?
+  actionTaken    String?
+
+  // Operational status
+  status           String  @default("SAVED")
+  hasDeficiency    Boolean @default(false)
+  requiresFollowUp Boolean @default(false)
+
+  // Pending / recheck flags
+  poojaPending      Boolean @default(false)
+  soundPending      Boolean @default(false)
+  fireSafetyPending Boolean @default(false)
+
+  // GPS
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Source/session
+  checkSource     String?
+  userSessionId   String?
+  deviceSessionId String?
+
+  // Timing
+  checkStartedAt DateTime?
+  checkedAt      DateTime  @default(now())
+  submittedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([gpid])
+  @@index([gpid, festivalDay])
+  @@index([gpid, festivalDate])
+  @@index([gpid, checkedAt])
+  @@index([userId, checkedAt])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([status])
+  @@index([hasDeficiency])
+  @@index([requiresFollowUp])
+  @@index([poojaPending])
+  @@index([soundPending])
+  @@index([fireSafetyPending])
+}
+
+// ============================================================================
+// PHASE 1: DAILY MANDAP VISITING & TARGET MANAGEMENT
+// ============================================================================
+
+model MandapDailyVisit {
+  id                       String    @id @default(cuid())
+
+  // Officer Snapshot
+  userId                   String
+  officerEmployeeId        String
+  officerName              String
+  officerRank              String    // "PC", "HC", "ASI", "SI", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB"
+  officerRole              String    // "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "SUPERVISORY", "SB"
+
+  // Mandap & Hierarchy Snapshot
+  gpid                     String
+  pandalName               String?
+  commissionerateName      String    @default("Hyderabad")
+  rangeName                String
+  zoneName                 String
+  divisionName             String
+  policeStationName        String
+  sectorName               String?
+  clusterName              String?
+  sensitivity              String    @default("NORMAL") // "NORMAL" | "SENSITIVE" | "HYPERSENSITIVE"
+
+  // Temporal Tracking
+  date                     String    // "YYYY-MM-DD"
+  festivalDay              Int       // 1 to 11
+  visitSequenceForDay      Int       @default(1) // 1 = 1st visit today, 2 = 2nd visit today
+  checkStartedAt           DateTime?
+  checkedAt                DateTime  @default(now())
+
+  // GPS & Geofence Verification
+  latitude                 Float
+  longitude                Float
+  accuracy                 Float?
+  distanceFromMandapMeters Float?
+  isWithinGeofence         Boolean   @default(true)
+
+  // Operational Classification
+  visitType                String    @default("ROUTINE") // "ROUTINE" | "SUPERVISORY" | "DEFICIENCY_RECHECK" | "SPECIAL_BRANCH" | "NIGHT_CHECK" | "EMERGENCY"
+  stage                    String    @default("STAGE_3_FESTIVITY") // "STAGE_1_PRE" | "STAGE_2_INSTALLATION" | "STAGE_3_FESTIVITY" | "STAGE_4_IMMERSION" | "STAGE_5_POST"
+
+  // Findings & Deficiencies
+  remarks                  String?
+  actionTaken              String?
+  evidenceUrls             Json?     // Array of photo URLs
+  hasDeficiency            Boolean   @default(false)
+  deficiencyCategories    Json?     // e.g. ["SOUND_VIOLATION", "FIRE_SAFETY", "VOLUNTEER_ABSENCE"]
+  requiresFollowUp         Boolean   @default(false)
+
+  // Status & Metadata
+  completionStatus         String    @default("COMPLETED")
+  verificationSource       String    @default("QR_SCAN") // "QR_SCAN" | "MAP_SELECTION" | "MANUAL_GPID"
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([gpid, date])
+  @@index([userId, date])
+  @@index([policeStationName, date])
+  @@index([divisionName, date])
+  @@index([zoneName, date])
+  @@index([rangeName, date])
+  @@index([hasDeficiency])
+  @@index([sensitivity])
+}
+
+model DailyVisitTargetRule {
+  id                      String   @id @default(cuid())
+  role                    String   @unique // e.g. "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB_PS", "SB_DIVISION", "SB_ZONE", "SB_NIGHT_CITY"
+  frequencyPerMandap      Int      @default(1) // 2 for Cluster IC, 1 for Sector IC
+  minMandapsPerUnit       Int      @default(0) // 5 per sector for DI, 2 per PS for ACP, 2 per division for Addl DCP, 15 for SB PS
+  scopeLevel              String   // "CLUSTER" | "SECTOR" | "PS" | "DIVISION" | "ZONE" | "COMMISSIONERATE"
+  requiresSensitiveMandap Boolean  @default(false) // true for ACP, Addl DCP, SB
+  shiftType               String   @default("DAY") // "DAY" | "NIGHT"
+  activeFromDay           Int      @default(1)
+  activeToDay             Int      @default(11)
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model GaneshDutyAssignment {
+  id                  String    @id @default(cuid())
+  userId              String
+  officerEmployeeId   String
+  officerName         String
+  officerRank         String
+  assignedRole        String    // "CLUSTER_INCHARGE", "SECTOR_INCHARGE", "DI", "SHO", "ACP", "ADDL_DCP", "DCP", "SB"
+
+  // Operational Scope
+  commissionerateName String    @default("Hyderabad")
+  rangeName           String
+  zoneName            String
+  divisionName        String
+  policeStationName   String
+  sectorName          String?
+  clusterName         String?
+  assignedGpids       Json?     // Optional array of specific GPIDs
+
+  // Temporal Validity
+  effectiveFrom       DateTime  @default(now())
+  effectiveTo         DateTime?
+  status              String    @default("ACTIVE") // "ACTIVE" | "ON_LEAVE" | "RELIEVED" | "TRANSFERRED"
+  notes               String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([policeStationName, status])
+  @@index([sectorName, status])
+  @@index([clusterName, status])
+}
+
+model DailyOfficerTargetSummary {
+  id                      String    @id @default(cuid())
+  date                    String    // "YYYY-MM-DD"
+  festivalDay             Int       // 1 to 11
+  userId                  String
+  officerEmployeeId       String
+  officerName             String
+  officerRank             String
+  officerRole             String
+  commissionerateName     String    @default("Hyderabad")
+  rangeName               String
+  zoneName                String
+  divisionName            String
+  policeStationName       String
+  sectorName              String?
+  clusterName             String?
+
+  // Quotas & Progress
+  targetMandapCount       Int       @default(0)
+  targetTotalVisits       Int       @default(0)
+  completedUniqueMandaps  Int       @default(0)
+  completedTotalVisits    Int       @default(0)
+  sensitiveTargetCount    Int       @default(0)
+  sensitiveCompletedCount Int       @default(0)
+  deficienciesReported    Int       @default(0)
+
+  // Status
+  compliancePercentage    Float     @default(0.0)
+  status                  String    @default("DEFICIT") // "COMPLETED" | "ON_TRACK" | "DEFICIT" | "NOT_STARTED"
+  lastVisitedAt           DateTime?
+  calculatedAt            DateTime  @default(now())
+
+  @@unique([date, userId])
+  @@index([date, policeStationName])
+  @@index([date, divisionName])
+  @@index([date, zoneName])
+  @@index([date, rangeName])
+  @@index([date, status])
+}

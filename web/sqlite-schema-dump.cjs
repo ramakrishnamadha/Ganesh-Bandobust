@@ -1,0 +1,1 @@
+const Database=require("better-sqlite3");const db=new Database("dev.db",{readonly:true});const rows=db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type,name").all();for(const r of rows){console.log("\n--- "+r.type+" "+r.name+" ON "+r.tbl_name+" ---");console.log(r.sql);}db.close();

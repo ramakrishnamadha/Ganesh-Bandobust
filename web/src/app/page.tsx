@@ -1,57 +1,127 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
+type LoginUser = {
+  id: string;
+  employeeId: string;
+  username: string;
+  officerName: string;
+  rank: string;
+  role: string;
+  accessLevel: number;
+  phoneNumber?: string | null;
+  team?: string | null;
+  jurisdiction?: {
+    commissionerateCode?: string | null;
+    commissionerateName?: string | null;
+    rangeCode?: string | null;
+    rangeName?: string | null;
+    zoneCode?: string | null;
+    zoneName?: string | null;
+    divisionCode?: string | null;
+    divisionName?: string | null;
+    policeStationCode?: string | null;
+    policeStationName?: string | null;
+    sectorCode?: string | null;
+    sectorName?: string | null;
+    allPoliceStations?: boolean;
+    allDivisions?: boolean;
+    allZones?: boolean;
+    allRanges?: boolean;
+  };
+  canViewLiveTracking: boolean;
+  mustChangePassword: boolean;
+};
+
+type LoginResponse = {
+  success: boolean;
+  user?: LoginUser;
+  requiresPasswordChange?: boolean;
+  error?: string;
+};
 
 export default function Home() {
-  const router = useRouter();
-
-  const [username, setUsername] = useState("field1");
-  const [password, setPassword] = useState("field123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (isLoggingIn) {
+      return;
+    }
+
     setError("");
 
-    if (username === "field1" && password === "field123") {
-      localStorage.setItem(
-        "ganesh_user",
-        JSON.stringify({
-          username: "field1",
-          officerName: "Field Officer Demo",
-          role: "FIELD_OFFICER",
-          policeStation: "Demo Police Station",
-          sector: "03",
-        })
-      );
+    const trimmedUsername = username.trim();
 
-      router.push("/dashboard");
+    if (!trimmedUsername || !password) {
+      setError("Enter Employee ID and password.");
       return;
     }
 
-    if (username === "sho1" && password === "sho123") {
+    setIsLoggingIn(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          username: trimmedUsername,
+          password,
+        }),
+      });
+
+      const data = (await response.json()) as LoginResponse;
+
+      if (!response.ok || !data.success || !data.user) {
+        setError(data.error ?? "Invalid Employee ID or password.");
+        return;
+      }
+
+      /*
+       * This copy is only for displaying the logged-in officer
+       * in the existing UI.
+       *
+       * Authentication and authorization continue to rely on
+       * the signed HttpOnly session cookie created by the server.
+       */
       localStorage.setItem(
         "ganesh_user",
-        JSON.stringify({
-          username: "sho1",
-          officerName: "SHO Demo",
-          role: "SHO",
-          policeStation: "Demo Police Station",
-          sector: "",
-        })
+        JSON.stringify(data.user),
       );
 
-      router.push("/dashboard");
-      return;
-    }
+      /*
+       * First-login users must change the default password
+       * before continuing to the main application.
+       */
+      if (
+        data.requiresPasswordChange ||
+        data.user.mustChangePassword
+      ) {
+        window.location.href = "/change-password";
+        return;
+      }
 
-    setError("Invalid username or password");
+      window.location.href = "/dashboard";
+    } catch (loginError) {
+      console.error("Web login error:", loginError);
+
+      setError(
+        "Unable to connect to the login service. Please try again.",
+      );
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   return (
     <main className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
-
         <div className="bg-[#17365D] text-white text-center px-8 py-8">
           <div className="text-sm font-semibold tracking-widest mb-3">
             OFFICIAL USE
@@ -80,15 +150,22 @@ export default function Home() {
           </p>
 
           <label className="block text-sm font-semibold text-slate-700 mb-2">
-            Username
+            Employee ID
           </label>
 
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
-            className="w-full border border-slate-300 rounded-lg px-4 py-3 mb-5 outline-none focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void handleLogin();
+              }
+            }}
+            placeholder="Enter Employee ID"
+            autoComplete="username"
+            disabled={isLoggingIn}
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 mb-5 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
           />
 
           <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -99,8 +176,15 @@ export default function Home() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void handleLogin();
+              }
+            }}
             placeholder="Enter password"
-            className="w-full border border-slate-300 rounded-lg px-4 py-3 mb-4 outline-none focus:ring-2 focus:ring-blue-500"
+            autoComplete="current-password"
+            disabled={isLoggingIn}
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 mb-4 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
           />
 
           {error && (
@@ -111,15 +195,18 @@ export default function Home() {
 
           <button
             type="button"
-            onClick={handleLogin}
-            className="w-full bg-[#17365D] hover:bg-[#244d7e] text-white font-semibold py-3 rounded-lg transition"
+            onClick={() => {
+              void handleLogin();
+            }}
+            disabled={isLoggingIn}
+            className="w-full bg-[#17365D] hover:bg-[#244d7e] disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition"
           >
-            LOGIN
+            {isLoggingIn ? "LOGGING IN..." : "LOGIN"}
           </button>
 
           <div className="text-xs text-slate-400 text-center mt-5">
-            <p>Field Officer Demo: field1 / field123</p>
-            <p>SHO Demo: sho1 / sho123</p>
+            <p>Username: Employee ID</p>
+            <p>First-time users must change the default password.</p>
           </div>
         </div>
       </div>

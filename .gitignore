@@ -1,0 +1,47 @@
+# Secrets / signing keys
+*.jks
+*.keystore
+*.pem
+.env
+.env.*
+!.env.example
+
+# Databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Deployment archives
+*.tar.gz
+
+# Gradle generated data
+.gradle/
+**/.gradle/
+
+# Backups
+*_backup.dart
+*_backup.*
+*.backup
+*.backup-*
+backup_old_measurement/
+
+# Flutter / Dart generated
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
+# Node generated
+node_modules/
+.next/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Local AI/development tool metadata
+web/.agents/
+web/.claude/
+web/.windsurf/
+desktop/

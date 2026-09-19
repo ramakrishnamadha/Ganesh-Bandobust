@@ -421,7 +421,7 @@ class _GpidListScreenState extends State<GpidListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('GPID Ganesh Idols'),
+        title: const Text('5-Stages Inspection'),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _futureRecords,

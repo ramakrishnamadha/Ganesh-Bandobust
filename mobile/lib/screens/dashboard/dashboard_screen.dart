@@ -1443,14 +1443,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   title: const Text(
-                    'GPID Ganesh Idols',
+                    '5-Stages Inspection',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
                   ),
                   subtitle: const Text(
-                    'View complete GPID list',
+                    'Complete 5-stage GPID verification & inspections',
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,

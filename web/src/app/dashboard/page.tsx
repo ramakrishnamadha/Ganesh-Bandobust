@@ -194,177 +194,264 @@ export default function Dashboard() {
     },
   ];
 
+  const menuItems = [
+    {
+      label: "Dashboard",
+      action: () => router.push("/dashboard"),
+    },
+    {
+      label: "Applications / GPIDs",
+      action: () => {},
+    },
+    {
+      label: "Daily Visitings",
+      action: () => {},
+    },
+    {
+      label: "Festival Five Stage",
+      action: () => router.push("/dashboard"),
+    },
+    {
+      label: "Live Tracking",
+      action: () => {},
+    },
+    {
+      label: "Reports & Analytics",
+      action: () => {},
+    },
+    {
+      label: "Settings / Administration",
+      action: () => {},
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-100">
       <header className="bg-[#17365D] text-white">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-5">
           <div>
             <p className="text-xs tracking-widest text-blue-200">
               OFFICIAL USE
             </p>
 
-            <h1 className="text-xl md:text-2xl font-bold">
+            <h1 className="text-xl font-bold md:text-2xl">
               Ganesh Festival Bandobust Management System
             </h1>
           </div>
 
-          <button
-            onClick={logout}
-            className="border border-white/30 px-4 py-2 rounded-lg hover:bg-white/10"
-          >
-            Logout
-          </button>
+          <div className="hidden text-right sm:block">
+            <p className="text-xs tracking-wide text-blue-200">
+              LOGGED IN AS
+            </p>
+
+            <p className="text-sm font-bold text-white">
+              {user.officerName}
+            </p>
+
+            <p className="text-xs text-blue-100">
+              {user.username} • {user.role}
+            </p>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <section className="bg-white rounded-xl shadow-sm p-5 mb-7">
-          <div className="grid md:grid-cols-4 gap-5">
-            <div>
-              <p className="text-xs text-slate-500">
-                Officer
+      <div className="mx-auto flex max-w-7xl">
+        <aside className="min-h-[calc(100vh-88px)] w-64 shrink-0 border-r border-slate-200 bg-white">
+          <div className="p-4">
+            <div className="mb-5 rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Logged-in Officer
               </p>
 
-              <p className="font-bold text-slate-800">
+              <p className="mt-1 font-bold text-slate-800">
                 {user.officerName}
               </p>
-            </div>
 
-            <div>
               <p className="text-xs text-slate-500">
-                Role
-              </p>
-
-              <p className="font-bold text-slate-800">
                 {user.role}
               </p>
             </div>
 
-            <div>
-              <p className="text-xs text-slate-500">
-                Police Station
-              </p>
-
-              <p className="font-bold text-slate-800">
-                {user.policeStation}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-slate-500">
-                Sector
-              </p>
-
-              <p className="font-bold text-slate-800">
-                {user.sector || "-"}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold text-slate-800">
-            Dashboard
-          </h2>
-
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-bold ${
-              gpidLoading
-                ? "bg-amber-100 text-amber-800"
-                : gpidError
-                  ? "bg-red-100 text-red-800"
-                  : "bg-emerald-100 text-emerald-800"
-            }`}
-          >
-            {gpidLoading
-              ? "LOADING GPID DATA"
-              : gpidError
-                ? "GPID DATA ERROR"
-                : "LIVE GPID DATA"}
-          </span>
-        </div>
-
-        {gpidError && (
-          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {gpidError}
-          </div>
-        )}
-
-        <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {dashboardCards.map((card) => (
-            <div
-              key={card.title}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-5"
-            >
-              <div className="text-3xl font-bold text-[#17365D]">
-                {card.value}
-              </div>
-
-              <p className="text-sm text-slate-600 mt-2">
-                {card.title}
-              </p>
-            </div>
-          ))}
-        </section>
-
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-800">
-            Festival Stages
-          </h2>
-        </div>
-
-        <section className="space-y-3">
-          {stages.map((stage) => (
-            <button
-              key={stage.number}
-              type="button"
-              onClick={() => {
-                if (stage.active && stage.route) {
-                  router.push(stage.route);
-                }
-              }}
-              className={`w-full text-left bg-white border rounded-xl px-5 py-5 flex items-center justify-between transition ${
-                stage.active
-                  ? "border-blue-300 hover:border-blue-500 cursor-pointer"
-                  : "border-slate-200 cursor-default"
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                    stage.active
+            <nav className="space-y-1">
+              {menuItems.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.action}
+                  className={`w-full rounded-lg px-4 py-3 text-left text-sm font-semibold transition ${
+                    item.label === "Dashboard"
                       ? "bg-[#17365D] text-white"
-                      : "bg-slate-200 text-slate-500"
+                      : "text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  {stage.number}
-                </div>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
 
-                <div>
-                  <p className="font-bold text-slate-800">
-                    {stage.name}
-                  </p>
+            <div className="my-4 border-t border-slate-200" />
 
-                  <p
-                    className={`text-sm ${
-                      stage.active
-                        ? "text-green-600"
-                        : "text-slate-400"
-                    }`}
-                  >
-                    {stage.status}
-                  </p>
-                </div>
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={logout}
+                className="w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1 px-6 py-8">
+          <section className="mb-7 rounded-xl bg-white p-5 shadow-sm">
+            <div className="grid gap-5 md:grid-cols-4">
+              <div>
+                <p className="text-xs text-slate-500">
+                  Officer
+                </p>
+
+                <p className="font-bold text-slate-800">
+                  {user.officerName}
+                </p>
               </div>
 
-              {stage.active && (
-                <span className="text-[#17365D] font-semibold">
-                  Open →
-                </span>
-              )}
-            </button>
-          ))}
-        </section>
+              <div>
+                <p className="text-xs text-slate-500">
+                  Role
+                </p>
+
+                <p className="font-bold text-slate-800">
+                  {user.role}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-500">
+                  Police Station
+                </p>
+
+                <p className="font-bold text-slate-800">
+                  {user.policeStation}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-500">
+                  Sector
+                </p>
+
+                <p className="font-bold text-slate-800">
+                  {user.sector || "-"}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-2xl font-bold text-slate-800">
+              Dashboard
+            </h2>
+
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                gpidLoading
+                  ? "bg-amber-100 text-amber-800"
+                  : gpidError
+                    ? "bg-red-100 text-red-800"
+                    : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {gpidLoading
+                ? "LOADING GPID DATA"
+                : gpidError
+                  ? "GPID DATA ERROR"
+                  : "LIVE GPID DATA"}
+            </span>
+          </div>
+
+          {gpidError && (
+            <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {gpidError}
+            </div>
+          )}
+
+          <section className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {dashboardCards.map((card) => (
+              <div
+                key={card.title}
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+              >
+                <div className="text-3xl font-bold text-[#17365D]">
+                  {card.value}
+                </div>
+
+                <p className="mt-2 text-sm text-slate-600">
+                  {card.title}
+                </p>
+              </div>
+            ))}
+          </section>
+
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-800">
+              Festival Stages
+            </h2>
+          </div>
+
+          <section className="space-y-3">
+            {stages.map((stage) => (
+              <button
+                key={stage.number}
+                type="button"
+                onClick={() => {
+                  if (stage.active && stage.route) {
+                    router.push(stage.route);
+                  }
+                }}
+                className={`flex w-full items-center justify-between rounded-xl border bg-white px-5 py-5 text-left transition ${
+                  stage.active
+                    ? "cursor-pointer border-blue-300 hover:border-blue-500"
+                    : "cursor-default border-slate-200"
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full font-bold ${
+                      stage.active
+                        ? "bg-[#17365D] text-white"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {stage.number}
+                  </div>
+
+                  <div>
+                    <p className="font-bold text-slate-800">
+                      {stage.name}
+                    </p>
+
+                    <p
+                      className={`text-sm ${
+                        stage.active
+                          ? "text-green-600"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {stage.status}
+                    </p>
+                  </div>
+                </div>
+
+                {stage.active && (
+                  <span className="font-semibold text-[#17365D]">
+                    Open →
+                  </span>
+                )}
+              </button>
+            ))}
+          </section>
+        </div>
       </div>
     </main>
   );

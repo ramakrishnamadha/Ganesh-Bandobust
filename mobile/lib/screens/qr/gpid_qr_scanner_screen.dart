@@ -5,7 +5,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/auth_service.dart';
 import '../../services/gpid_api_service.dart';
 import '../../services/gpid_qr_service.dart';
-import '../festivity/festivity_check_screen.dart';
+
+import 'scanned_gpid_details_screen.dart';
 
 class GpidQrScannerScreen extends StatefulWidget {
   final AuthenticatedUser authenticatedUser;
@@ -152,7 +153,6 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
         final record = verification.record ?? <String, dynamic>{
           'unique_id': candidateGpid,
         };
-        final actualGpid = record['unique_id']?.toString() ?? candidateGpid;
 
         try {
           await _controller.stop();
@@ -164,12 +164,15 @@ class _GpidQrScannerScreenState extends State<GpidQrScannerScreen>
           Navigator.pop(context);
           widget.onVerified!(record, verification.stages);
         } else {
-          // Replace scanner with the existing Festivity Checking flow
+          // Replace scanner with the GPID Details Screen
           await Navigator.pushReplacement(
             context,
             MaterialPageRoute<void>(
-              builder: (_) => FestivityCheckScreen(
-                applicationId: actualGpid,
+              builder: (_) => ScannedGpidDetailsScreen(
+                record: record,
+                authenticatedUser: widget.authenticatedUser,
+                allowStageSelection: false,
+                defaultStage: 3,
               ),
             ),
           );

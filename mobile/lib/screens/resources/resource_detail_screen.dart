@@ -5,7 +5,7 @@ import '../../services/resource_mock_service.dart';
 class ResourceDetailScreen extends StatelessWidget {
   final ResourceItem resource;
 
-  const ResourceDetailScreen({Key? key, required this.resource}) : super(key: key);
+  const ResourceDetailScreen({super.key, required this.resource});
 
   @override
   Widget build(BuildContext context) {

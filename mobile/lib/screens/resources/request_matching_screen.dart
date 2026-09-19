@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/resource_enums.dart';
-import '../../services/resource_mock_service.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_enums.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_models.dart';
+import 'package:ganesh_bandobust_mobile/services/resource_mock_service.dart';
 
 class RequestMatchingScreen extends StatefulWidget {
   final String requestId;
@@ -17,7 +18,9 @@ class _RequestMatchingScreenState extends State<RequestMatchingScreen> {
   @override
   Widget build(BuildContext context) {
     final request = _service.getRequests().firstWhere((r) => r.id == widget.requestId);
-    final available = _service.findNearestAvailableResources(request.latitude, request.longitude, request.category);
+    final reqLat = request.latitude;
+    final reqLng = request.longitude;
+    final available = _service.findNearestAvailableResources(reqLat, reqLng, request.resourceCategory);
 
     return Scaffold(
       appBar: AppBar(
@@ -34,10 +37,10 @@ class _RequestMatchingScreenState extends State<RequestMatchingScreen> {
                 final res = available[index];
                 final holdingStation = _service.getPoliceStationById(res.currentHoldingPoliceStationId);
                 final dist = _service.calculateDistance(
-                  request.latitude,
-                  request.longitude,
-                  holdingStation?.latitude ?? request.latitude,
-                  holdingStation?.longitude ?? request.longitude,
+                  reqLat,
+                  reqLng,
+                  holdingStation?.latitude ?? reqLat,
+                  holdingStation?.longitude ?? reqLng,
                 );
 
                 return Card(

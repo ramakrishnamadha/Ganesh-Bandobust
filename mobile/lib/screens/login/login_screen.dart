@@ -169,6 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ? user.officerName
             : user.username;
 
+
     final String role = user.role;
 
     final String rank = user.rank;

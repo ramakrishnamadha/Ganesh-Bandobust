@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/resource_enums.dart';
-import '../../models/resource_models.dart';
-import '../../services/resource_mock_service.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_enums.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_models.dart';
+import 'package:ganesh_bandobust_mobile/services/resource_mock_service.dart';
 import 'request_matching_screen.dart';
 
 class RequestDetailScreen extends StatefulWidget {
@@ -42,7 +42,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${request.quantity}x ${request.category.displayName}',
+              '${request.quantityRequested}x ${request.resourceCategory.displayName}',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF17365D)),
             ),
             const SizedBox(height: 16),

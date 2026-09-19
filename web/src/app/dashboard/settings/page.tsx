@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -794,8 +795,22 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          {/* TAB BUTTONS */}
-          <div className="flex gap-2">
+          {/* PRINCIPAL ADMIN NAVIGATION CARDS */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/dashboard/settings/wings"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 px-5 py-3 text-xs md:text-sm font-extrabold text-white shadow-md hover:border-blue-500 transition ring-1 ring-slate-700 hover:ring-blue-400"
+            >
+              <span>🏛️</span> 1. ADD WINGS & HIERARCHY →
+            </Link>
+
+            <Link
+              href="/dashboard/settings/role-allotment"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-5 py-3 text-xs md:text-sm font-extrabold text-white shadow-lg shadow-blue-900/30 hover:from-blue-600 hover:to-indigo-600 transition ring-2 ring-blue-400"
+            >
+              <span>👮</span> 2. ROLE ALLOTMENT →
+            </Link>
+
             <button
               type="button"
               onClick={() =>

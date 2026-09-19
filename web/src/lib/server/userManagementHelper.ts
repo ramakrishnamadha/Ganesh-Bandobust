@@ -159,3 +159,21 @@ export function resolveCompleteParentHierarchy(input: {
     policeStationName: input.policeStationName ? String(input.policeStationName).trim() : null,
   };
 }
+
+/**
+ * Normalizes raw rank string variants into broad operational categories for UI filtering/display
+ * WITHOUT altering stored DB rank strings.
+ */
+export function normalizeOfficerRank(rawRank?: string | null): string {
+  const r = String(rawRank ?? "").trim().toLowerCase();
+
+  if (r.includes("insp")) return "Inspector";
+  if (r.includes("sub") || r.includes("si")) return "SI";
+  if (r.includes("asi") || r.includes("assistant")) return "ASI";
+  if (r.includes("hc") || r.includes("head")) return "HC";
+  if (r.includes("pc") || r.includes("constable")) return "PC";
+  if (r.includes("hg") || r.includes("guard")) return "HG";
+
+  return rawRank ? String(rawRank).trim() : "Other";
+}
+

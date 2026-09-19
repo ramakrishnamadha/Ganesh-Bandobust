@@ -255,3 +255,49 @@ export function getHierarchyForZone(
     ) ?? null
   );
 }
+
+export function getHierarchyForDivision(
+  division: string,
+): GaneshHierarchyRecord | null {
+  const normalized =
+    division
+      .trim()
+      .toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    GANESH_HIERARCHY.find(
+      (item) =>
+        item.division
+          .trim()
+          .toLowerCase() ===
+        normalized,
+    ) ?? null
+  );
+}
+
+export function getHierarchyForRange(
+  range: string,
+): GaneshHierarchyRecord | null {
+  const normalized =
+    range
+      .trim()
+      .toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    GANESH_HIERARCHY.find(
+      (item) =>
+        item.range
+          .trim()
+          .toLowerCase() ===
+        normalized,
+    ) ?? null
+  );
+}

@@ -362,6 +362,18 @@ function filterRecordsForUser(
     );
 
   if (
+    text(
+      user.policeStationName,
+    ).length > 0
+  ) {
+    allowedPoliceStations.add(
+      normalizeAccessName(
+        user.policeStationName,
+      ),
+    );
+  }
+
+  if (
     allowedPoliceStations.size ===
     0
   ) {

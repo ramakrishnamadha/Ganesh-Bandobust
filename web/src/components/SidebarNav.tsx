@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 type SubMenuItem = {
   name: string;
@@ -27,7 +27,33 @@ type MenuItem = {
 
 export default function SidebarNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        router.push("/");
+        router.refresh();
+      } else {
+        setLogoutError("Failed to logout. Please try again.");
+        setIsLoggingOut(false);
+      }
+    } catch (error) {
+      setLogoutError("An error occurred during logout.");
+      setIsLoggingOut(false);
+    }
+  };
 
   // Check if current route is within Festival Five Stage
   const isFestivalRoute =
@@ -37,13 +63,19 @@ export default function SidebarNav() {
     pathname.startsWith("/dashboard/checking") ||
     pathname.startsWith("/dashboard/verification");
 
+  const isSettingsRoute = pathname.startsWith("/dashboard/settings");
+
   const [festivalExpanded, setFestivalExpanded] = useState(isFestivalRoute);
+  const [settingsExpanded, setSettingsExpanded] = useState(isSettingsRoute);
 
   useEffect(() => {
     if (isFestivalRoute) {
       setFestivalExpanded(true);
     }
-  }, [isFestivalRoute]);
+    if (isSettingsRoute) {
+      setSettingsExpanded(true);
+    }
+  }, [isFestivalRoute, isSettingsRoute]);
 
   const menuItems: MenuItem[] = [
     {
@@ -273,7 +305,6 @@ export default function SidebarNav() {
     },
     {
       name: "Settings / Administration",
-      href: "/dashboard/settings",
       activeCardStyle:
         "bg-gradient-to-r from-slate-600 to-blue-600 text-white shadow-lg shadow-slate-500/30 ring-2 ring-slate-400 font-bold",
       inactiveCardStyle:
@@ -302,6 +333,41 @@ export default function SidebarNav() {
           />
         </svg>
       ),
+      children: [
+        {
+          name: "Add Wings & Hierarchy",
+          href: "/dashboard/settings/wings",
+          badgeLabel: "WINGS",
+          activeBg:
+            "bg-gradient-to-r from-slate-600 to-blue-600 text-white font-bold ring-2 ring-slate-400 shadow-md",
+          inactiveBg:
+            "bg-slate-950/30 text-slate-200 border border-slate-800/40 hover:bg-slate-900/50 hover:text-white",
+          badgeColor: "bg-slate-500",
+          badgeTextColor: "text-slate-200",
+        },
+        {
+          name: "Role Allotment",
+          href: "/dashboard/settings/role-allotment",
+          badgeLabel: "ALLOTMENT",
+          activeBg:
+            "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold ring-2 ring-blue-400 shadow-md",
+          inactiveBg:
+            "bg-blue-950/30 text-blue-200 border border-blue-800/40 hover:bg-blue-900/50 hover:text-white",
+          badgeColor: "bg-indigo-500",
+          badgeTextColor: "text-indigo-200",
+        },
+        {
+          name: "User Directory Hub",
+          href: "/dashboard/settings",
+          badgeLabel: "HUB",
+          activeBg:
+            "bg-gradient-to-r from-slate-700 to-slate-800 text-white font-bold ring-2 ring-slate-400 shadow-md",
+          inactiveBg:
+            "bg-slate-950/30 text-slate-300 border border-slate-800/40 hover:bg-slate-900/50 hover:text-white",
+          badgeColor: "bg-slate-600",
+          badgeTextColor: "text-slate-200",
+        },
+      ],
     },
   ];
 
@@ -309,18 +375,25 @@ export default function SidebarNav() {
     <nav className="space-y-3 px-3.5 py-5">
       {menuItems.map((item) => {
         const hasChildren = Boolean(item.children && item.children.length > 0);
+        const isFestival = item.name === "Festival Five Stage";
+        const isSettings = item.name === "Settings / Administration";
+        const isExpanded = isFestival ? festivalExpanded : isSettings ? settingsExpanded : false;
+
         const isActive = item.href
           ? item.href === "/dashboard"
             ? pathname === "/dashboard"
-            : pathname.startsWith(item.href)
-          : isFestivalRoute;
+            : pathname === item.href
+          : isFestival ? isFestivalRoute : isSettingsRoute;
 
         return (
           <div key={item.name} className="space-y-2">
             {hasChildren ? (
               <button
                 type="button"
-                onClick={() => setFestivalExpanded(!festivalExpanded)}
+                onClick={() => {
+                  if (isFestival) setFestivalExpanded(!festivalExpanded);
+                  if (isSettings) setSettingsExpanded(!settingsExpanded);
+                }}
                 className={`group flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-all duration-200 ${
                   isActive ? item.activeCardStyle : item.inactiveCardStyle
                 }`}
@@ -340,7 +413,7 @@ export default function SidebarNav() {
                 <svg
                   className={`h-4 w-4 transition-transform duration-200 ${
                     isActive ? "text-white" : "text-slate-400 group-hover:text-white"
-                  } ${festivalExpanded ? "rotate-180" : ""}`}
+                  } ${isExpanded ? "rotate-180" : ""}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -373,10 +446,10 @@ export default function SidebarNav() {
             )}
 
             {/* EXPANDABLE CHILD ITEMS */}
-            {hasChildren && festivalExpanded && (
-              <div className="ml-3 space-y-2 border-l-2 border-pink-500/40 pl-3 pt-1 pb-1">
+            {hasChildren && isExpanded && (
+              <div className="ml-3 space-y-2 border-l-2 border-slate-500/40 pl-3 pt-1 pb-1">
                 {item.children?.map((child) => {
-                  const isChildActive = pathname.startsWith(child.href);
+                  const isChildActive = pathname === child.href || (child.href !== "/dashboard/settings" && pathname.startsWith(child.href));
 
                   return (
                     <Link
@@ -411,6 +484,43 @@ export default function SidebarNav() {
         );
       })}
     </nav>
+  );
+
+  const renderLogoutButton = () => (
+    <div className="px-4 pb-4">
+      {logoutError && (
+        <p className="mb-2 text-xs font-semibold text-red-400 text-center">
+          {logoutError}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={isLoggingOut}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-800/40 bg-red-950/40 px-4 py-3 text-sm font-bold text-red-400 transition-all duration-200 hover:bg-red-900/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isLoggingOut ? (
+          <span className="animate-pulse">Logging out...</span>
+        ) : (
+          <>
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+            <span>Logout</span>
+          </>
+        )}
+      </button>
+    </div>
   );
 
   return (
@@ -493,6 +603,9 @@ export default function SidebarNav() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">{renderNavItems()}</div>
+            <div className="border-t border-slate-800/80 pt-4 mt-auto shrink-0">
+              {renderLogoutButton()}
+            </div>
           </div>
         </div>
       )}
@@ -515,7 +628,7 @@ export default function SidebarNav() {
 
         <div className="flex-1 overflow-y-auto">{renderNavItems()}</div>
 
-        <div className="border-t border-slate-800/80 p-4">
+        <div className="border-t border-slate-800/80 p-4 pb-2 shrink-0">
           <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-3.5 text-xs">
             <p className="font-extrabold text-slate-200 uppercase tracking-wider text-[11px]">
               Command Cockpit
@@ -524,6 +637,9 @@ export default function SidebarNav() {
               Monitoring & Supervisory View
             </p>
           </div>
+        </div>
+        <div className="shrink-0">
+          {renderLogoutButton()}
         </div>
       </aside>
     </>

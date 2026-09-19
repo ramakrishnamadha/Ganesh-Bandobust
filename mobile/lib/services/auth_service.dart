@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -400,57 +401,57 @@ class AuthService {
     required String employeeId,
     required String password,
   }) async {
+    final String requestUrl = '$_baseUrl/api/auth/login';
+    debugPrint('[DIAGNOSTIC] 1. Request URL: $requestUrl');
+    debugPrint('[DIAGNOSTIC] 2. Employee ID: $employeeId');
+
     try {
-      final http.Response response =
-          await http.post(
-        Uri.parse(
-          '$_baseUrl/api/auth/login',
-        ),
+      final http.Response response = await http.post(
+        Uri.parse(requestUrl),
         headers: const <String, String>{
-          'Content-Type':
-              'application/json',
-          'Accept':
-              'application/json',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: jsonEncode(
           <String, dynamic>{
-            'username':
-                employeeId,
-            'password':
-                password,
+            'username': employeeId,
+            'password': password,
           },
         ),
       );
 
-      Map<String, dynamic> data =
-          <String, dynamic>{};
+      debugPrint('[DIAGNOSTIC] 3. HTTP Status Code: ${response.statusCode}');
+      debugPrint('[DIAGNOSTIC] 4. Response Body: ${response.body}');
+
+      final bool hasSetCookie = response.headers.containsKey('set-cookie') ||
+          response.headers.containsKey('Set-Cookie');
+      debugPrint(
+          '[DIAGNOSTIC] 5. Set-Cookie Header Exists: ${hasSetCookie ? "YES" : "NO"}');
+
+      Map<String, dynamic> data = <String, dynamic>{};
 
       if (response.body.isNotEmpty) {
-        final dynamic decoded =
-            jsonDecode(
-          response.body,
-        );
-
-        if (
-            decoded
-                is Map<String, dynamic>) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
           data = decoded;
         }
       }
 
-      if (
-          response.statusCode != 200) {
+      debugPrint('[DIAGNOSTIC] 6. Parsed success value: ${data['success']}');
+      debugPrint(
+          '[DIAGNOSTIC] 7. Parsed requiresPasswordChange value: ${data['requiresPasswordChange']}');
+
+      if (response.statusCode != 200) {
         _sessionCookie = null;
+
+        final String serverErrorMsg =
+            data['error']?.toString() ?? response.body;
 
         return LoginResult(
           success: false,
-          error:
-              data['error']
-                      ?.toString() ??
-                  'Login failed.',
+          error: 'HTTP ${response.statusCode}: $serverErrorMsg',
           user: null,
-          requiresPasswordChange:
-              false,
+          requiresPasswordChange: false,
         );
       }
 
@@ -460,48 +461,33 @@ class AuthService {
        * ganesh_web_session=xxxxx
        */
       final String? setCookie =
-          response
-              .headers['set-cookie'];
+          response.headers['set-cookie'] ?? response.headers['Set-Cookie'];
 
-      if (
-          setCookie != null &&
-          setCookie.isNotEmpty) {
-        final String firstCookiePart =
-            setCookie
-                .split(';')
-                .first
-                .trim();
+      if (setCookie != null && setCookie.isNotEmpty) {
+        final String firstCookiePart = setCookie.split(';').first.trim();
 
-        if (
-            firstCookiePart
-                .isNotEmpty) {
-          _sessionCookie =
-              firstCookiePart;
+        if (firstCookiePart.isNotEmpty) {
+          _sessionCookie = firstCookiePart;
         }
       }
 
-      final dynamic userData =
-          data['user'];
+      final dynamic userData = data['user'];
 
-      if (
-          userData
-              is! Map<String, dynamic>) {
+      if (userData is! Map<String, dynamic>) {
         _sessionCookie = null;
 
         return const LoginResult(
           success: false,
           error:
-              'Login response did not contain a valid user profile.',
+              'HTTP 200: Login response did not contain a valid user profile.',
           user: null,
-          requiresPasswordChange:
-              false,
+          requiresPasswordChange: false,
         );
       }
 
-      final AuthenticatedUser user =
-          AuthenticatedUser.fromJson(
-        userData,
-      );
+      final AuthenticatedUser user = AuthenticatedUser.fromJson(userData);
+      debugPrint(
+          '[DIAGNOSTIC] 8. Parsed user.mustChangePassword: ${user.mustChangePassword}');
 
       _pendingUserJson = jsonEncode(userData);
 
@@ -510,21 +496,19 @@ class AuthService {
         error: null,
         user: user,
         requiresPasswordChange:
-            data[
-                    'requiresPasswordChange'] ==
-                true ||
-            user.mustChangePassword,
+            data['requiresPasswordChange'] == true || user.mustChangePassword,
       );
-    } catch (_) {
+    } catch (e) {
       _sessionCookie = null;
 
-      return const LoginResult(
+      debugPrint(
+          '[DIAGNOSTIC] 9. Exception Type: ${e.runtimeType}, Exception Message: $e');
+
+      return LoginResult(
         success: false,
-        error:
-            'Unable to connect to the authentication server.',
+        error: 'NETWORK ERROR: ${e.runtimeType}: $e',
         user: null,
-        requiresPasswordChange:
-            false,
+        requiresPasswordChange: false,
       );
     }
   }

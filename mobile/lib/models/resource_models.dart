@@ -68,6 +68,13 @@ class ResourceRequest {
   final String? assignedResourceId;
   final DateTime createdAt;
 
+  // Compatibility aliases
+  String get raisingPoliceStationId => requestingPoliceStationId;
+  ResourceCategory get resourceCategory => category;
+  int get quantityRequested => quantity;
+  double get siteLatitude => latitude;
+  double get siteLongitude => longitude;
+
   const ResourceRequest({
     required this.id,
     required this.requestingPoliceStationId,

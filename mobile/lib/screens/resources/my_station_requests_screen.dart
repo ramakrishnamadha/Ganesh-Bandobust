@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/resource_models.dart';
-import '../../services/resource_mock_service.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_enums.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_models.dart';
+import 'package:ganesh_bandobust_mobile/services/resource_mock_service.dart';
 import 'request_detail_screen.dart';
 
 class MyStationRequestsScreen extends StatefulWidget {
@@ -17,9 +18,9 @@ class _MyStationRequestsScreenState extends State<MyStationRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final requests = _service.getRequestsByStation(widget.userPoliceStationId);
+    final List<ResourceRequest> requests = _service.getRequestsByStation(widget.userPoliceStationId);
     // sort by latest
-    requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    requests.sort((ResourceRequest a, ResourceRequest b) => b.createdAt.compareTo(a.createdAt));
 
     return Scaffold(
       appBar: AppBar(
@@ -39,7 +40,7 @@ class _MyStationRequestsScreenState extends State<MyStationRequestsScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     title: Text(
-                      '${req.quantity}x ${req.category.displayName}',
+                      '${req.quantityRequested}x ${req.resourceCategory.displayName}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text('Status: ${req.status.displayName} | Priority: ${req.priority.displayName}'),

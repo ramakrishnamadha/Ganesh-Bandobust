@@ -1108,11 +1108,13 @@ class _RouteVerificationScreenState extends State<RouteVerificationScreen> {
         options: MapOptions(
           initialCenter: center,
           initialZoom: 16,
+          minZoom: 5,
+          maxZoom: 19,
         ),
         children: [
           TileLayer(
-            urlTemplate:
-                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              urlTemplate:
+                  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
             userAgentPackageName:
                 'in.gov.tspolice.hyderabad.ganesh_bandobust_mobile',
           ),

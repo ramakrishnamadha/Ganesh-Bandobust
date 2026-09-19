@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../models/resource_enums.dart';
+import 'package:ganesh_bandobust_mobile/models/resource_enums.dart';
 import '../../services/auth_service.dart';
 import '../../services/gpid_api_service.dart';
 import '../checking/checking_selection_screen.dart';
 import '../checking/gpid_based_checking_screen.dart';
 import '../checking/map_based_checking_screen.dart';
+import '../qr/scanned_gpid_details_screen.dart';
 import '../festivity/festivity_check_screen.dart';
 import '../installation/installation_check_screen.dart';
 import '../login/login_screen.dart';
@@ -15,6 +16,8 @@ import '../pre_installation/pre_installation_screen.dart';
 import '../qr/gpid_qr_scanner_screen.dart';
 import '../resources/resource_command_dashboard_screen.dart';
 import '../resources/resource_directory_screen.dart';
+import '../immersion/immersion_workflow_screen.dart';
+import '../gpid/gpid_list_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String officerName;
@@ -517,19 +520,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => _activeStage == 3
-            ? FestivityCheckScreen(
-                applicationId: gpid,
-              )
-            : _activeStage == 2
-                ? InstallationCheckScreen(
-                    applicationId: gpid,
-                    ganeshRecord: record,
-                  )
-                : PreInstallationScreen(
-                    applicationId: gpid,
-                    ganeshRecord: record,
-                  ),
+        builder: (_) {
+          if (_activeStage == 4) {
+            return ImmersionWorkflowScreen(
+              applicationId: gpid,
+              ganeshRecord: record,
+            );
+          } else if (_activeStage == 3) {
+            return FestivityCheckScreen(
+              applicationId: gpid,
+            );
+          } else if (_activeStage == 2) {
+            return InstallationCheckScreen(
+              applicationId: gpid,
+              ganeshRecord: record,
+            );
+          } else {
+            return PreInstallationScreen(
+              applicationId: gpid,
+              ganeshRecord: record,
+            );
+          }
+        },
       ),
     );
   }
@@ -1179,7 +1191,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   builder: (_) => GpidQrScannerScreen(
                     authenticatedUser: widget.authenticatedUser,
                     onVerified: (record, stages) {
-                      _openGpid(record);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ScannedGpidDetailsScreen(
+                            record: record,
+                            authenticatedUser: widget.authenticatedUser,
+                            allowStageSelection: true,
+                            defaultStage: _activeStage,
+                            onStartChecking: (selectedStage) {
+                              setState(() {
+                                _activeStage = selectedStage;
+                              });
+                              _openGpid(record);
+                            },
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -1378,7 +1406,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   title: const Text(
-                    'CHECKING',
+                    'Daily visitings',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -1415,14 +1443,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   title: const Text(
-                    'GPID Ganesh Idols',
+                    '5-Stages Inspection',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
                   ),
                   subtitle: const Text(
-                    'View complete GPID list',
+                    'Complete 5-stage GPID verification & inspections',
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1451,10 +1479,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     await Navigator.push(
                       context,
                       MaterialPageRoute<void>(
-                        builder: (_) => _ScopedGpidListScreen(
-                          records:
-                              List<Map<String, dynamic>>.from(_records),
-                          stage: _activeStage,
+                        builder: (_) => GpidListScreen(
+                          user: widget.authenticatedUser,
                         ),
                       ),
                     );
@@ -1526,62 +1552,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              const Text(
-                'Festival Stages',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _StageTile(
-                number: '1',
-                title: 'Pre-Installation',
-                status: _activeStage == 1 ? 'ACTIVE' : 'Available',
-                active: _activeStage == 1,
-                unlocked: true,
-                onTap: () {
-                  setState(() {
-                    _activeStage = 1;
-                  });
-                },
-              ),
-              _StageTile(
-                number: '2',
-                title: 'Installation',
-                status: _activeStage == 2 ? 'ACTIVE' : 'Available',
-                active: _activeStage == 2,
-                unlocked: true,
-                onTap: () {
-                  setState(() {
-                    _activeStage = 2;
-                  });
-                },
-              ),
-              _StageTile(
-                number: '3',
-                title: 'During Festivity',
-                status: _activeStage == 3 ? 'ACTIVE' : 'Available',
-                active: _activeStage == 3,
-                unlocked: true,
-                onTap: () {
-                  setState(() {
-                    _activeStage = 3;
-                  });
-                },
-              ),
-              const _StageTile(
-                number: '4',
-                title: 'Immersion',
-                status: 'Not Started',
-              ),
-              const _StageTile(
-                number: '5',
-                title: 'Post-Immersion',
-                status: 'Not Started',
-              ),
-              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -1609,193 +1579,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Color(0xFF475569),
           fontWeight: FontWeight.w600,
         ),
-      ),
-    );
-  }
-}
-
-class _ScopedGpidListScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> records;
-  final int stage;
-
-  const _ScopedGpidListScreen({
-    required this.records,
-    required this.stage,
-  });
-
-  String _text(dynamic value) {
-    if (value == null) {
-      return '';
-    }
-
-    final text = value.toString().trim();
-
-    if (text.isEmpty || text.toLowerCase() == 'null') {
-      return '';
-    }
-
-    return text;
-  }
-
-  String _displayText(dynamic value) {
-    final valueText = _text(value);
-    return valueText.isEmpty ? '-' : valueText;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final sortedRecords =
-        List<Map<String, dynamic>>.from(records);
-
-    sortedRecords.sort(
-      (Map<String, dynamic> a, Map<String, dynamic> b) {
-        return _text(a['unique_id']).compareTo(
-          _text(b['unique_id']),
-        );
-      },
-    );
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF17365D),
-        foregroundColor: Colors.white,
-        title: Text(
-          stage == 3
-              ? 'During Festivity - Accessible GPIDs'
-              : stage == 2
-                  ? 'Installation - Accessible GPIDs'
-                  : 'Pre-Installation - Accessible GPIDs',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      body: sortedRecords.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No GPID records are available in your assigned Police Stations.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: sortedRecords.length,
-              itemBuilder: (
-                BuildContext context,
-                int index,
-              ) {
-                final record = sortedRecords[index];
-                final gpid = _text(record['unique_id']);
-
-                return Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(
-                      color: Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: ListTile(
-                    title: Text(
-                      _displayText(record['unique_id']),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF17365D),
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${_displayText(record['name'])}\n'
-                      '${_displayText(record['ps_name'])}',
-                    ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: gpid.isEmpty
-                        ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => stage == 3
-                                    ? FestivityCheckScreen(
-                                        applicationId: gpid,
-                                      )
-                                    : stage == 2
-                                        ? InstallationCheckScreen(
-                                            applicationId: gpid,
-                                            ganeshRecord: record,
-                                          )
-                                        : PreInstallationScreen(
-                                            applicationId: gpid,
-                                            ganeshRecord: record,
-                                          ),
-                              ),
-                            );
-                          },
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-class _StageTile extends StatelessWidget {
-  final String number;
-  final String title;
-  final String status;
-  final bool active;
-  final bool unlocked;
-  final VoidCallback? onTap;
-
-  const _StageTile({
-    required this.number,
-    required this.title,
-    required this.status,
-    this.active = false,
-    this.unlocked = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(
-          color: Color(0xFFE2E8F0),
-        ),
-      ),
-      child: ListTile(
-        onTap: unlocked ? onTap : null,
-        leading: CircleAvatar(
-          backgroundColor: active || unlocked
-              ? const Color(0xFF17365D)
-              : const Color(0xFFE2E8F0),
-          foregroundColor:
-              active || unlocked ? Colors.white : Colors.black54,
-          child: Text(number),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(status),
-        trailing: active
-            ? const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-              )
-            : unlocked
-                ? const Icon(Icons.chevron_right)
-                : const Icon(Icons.lock_outline),
       ),
     );
   }

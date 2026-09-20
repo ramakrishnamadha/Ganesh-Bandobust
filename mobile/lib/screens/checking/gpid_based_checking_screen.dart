@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/auth_service.dart';
 import '../festivity/festivity_check_screen.dart';
@@ -18,13 +19,21 @@ class GpidBasedCheckingScreen extends StatefulWidget {
       _GpidBasedCheckingScreenState();
 }
 
-class _GpidBasedCheckingScreenState
-    extends State<GpidBasedCheckingScreen> {
+class _GpidBasedCheckingScreenState extends State<GpidBasedCheckingScreen> {
   String? _selectedRange;
   String? _selectedZone;
   String? _selectedDivision;
   String? _selectedPoliceStation;
   String? _selectedGpid;
+
+  final TextEditingController _gpidController = TextEditingController();
+  String? _fastGpidError;
+
+  @override
+  void dispose() {
+    _gpidController.dispose();
+    super.dispose();
+  }
 
   String _text(dynamic value) {
     if (value == null) {
@@ -60,19 +69,14 @@ class _GpidBasedCheckingScreenState
     return a.isNotEmpty && a == b;
   }
 
-  List<String> _unique(
-    Iterable<Map<String, dynamic>> source,
-    String key,
-  ) {
+  List<String> _unique(Iterable<Map<String, dynamic>> source, String key) {
     final values = source
         .map((record) => _text(record[key]))
         .where((value) => value.isNotEmpty)
         .toSet()
         .toList();
 
-    values.sort(
-      (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
-    );
+    values.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     return values;
   }
@@ -233,8 +237,9 @@ class _GpidBasedCheckingScreenState
   }
 
   List<Map<String, dynamic>> get _stationRecords {
-    final policeStation =
-        _isPoliceStationLocked ? _fixedPoliceStation : _selectedPoliceStation;
+    final policeStation = _isPoliceStationLocked
+        ? _fixedPoliceStation
+        : _selectedPoliceStation;
 
     if (policeStation == null || policeStation.isEmpty) {
       return _divisionRecords;
@@ -246,13 +251,10 @@ class _GpidBasedCheckingScreenState
   }
 
   List<Map<String, dynamic>> get _gpidRecords {
-    final records =
-        List<Map<String, dynamic>>.from(_stationRecords);
+    final records = List<Map<String, dynamic>>.from(_stationRecords);
 
     records.sort(
-      (a, b) => _text(a['unique_id']).compareTo(
-        _text(b['unique_id']),
-      ),
+      (a, b) => _text(a['unique_id']).compareTo(_text(b['unique_id'])),
     );
 
     return records;
@@ -274,6 +276,26 @@ class _GpidBasedCheckingScreenState
     return null;
   }
 
+  String? get _derivedGpidPrefix {
+    if (_stationRecords.isEmpty) return null;
+
+    final prefixes = <String>{};
+    for (final record in _stationRecords) {
+      final gpid = _text(record['unique_id']);
+      if (gpid.startsWith('HYD') && gpid.length > 4) {
+        final last4 = gpid.substring(gpid.length - 4);
+        if (RegExp(r'^\d{4}$').hasMatch(last4)) {
+          prefixes.add(gpid.substring(0, gpid.length - 4));
+        }
+      }
+    }
+
+    if (prefixes.length == 1) {
+      return prefixes.first;
+    }
+    return null;
+  }
+
   bool get _rangeResolved =>
       _isRangeLocked || _fixedRange.isNotEmpty || _selectedRange != null;
 
@@ -281,7 +303,9 @@ class _GpidBasedCheckingScreenState
       _isZoneLocked || _fixedZone.isNotEmpty || _selectedZone != null;
 
   bool get _divisionResolved =>
-      _isDivisionLocked || _fixedDivision.isNotEmpty || _selectedDivision != null;
+      _isDivisionLocked ||
+      _fixedDivision.isNotEmpty ||
+      _selectedDivision != null;
 
   bool get _stationResolved =>
       _isPoliceStationLocked ||
@@ -319,7 +343,43 @@ class _GpidBasedCheckingScreenState
     setState(() {
       _selectedPoliceStation = value;
       _selectedGpid = null;
+      _gpidController.clear();
+      _fastGpidError = null;
     });
+  }
+
+  void _findGpid() {
+    setState(() {
+      _fastGpidError = null;
+    });
+
+    final input = _gpidController.text;
+    if (input.length != 4 || !RegExp(r'^\d{4}$').hasMatch(input)) {
+      setState(() {
+        _fastGpidError = 'Please enter exactly 4 digits.';
+      });
+      return;
+    }
+
+    final prefix = _derivedGpidPrefix;
+    if (prefix == null) return;
+
+    final fullGpid = '$prefix$input';
+
+    final matches = _stationRecords
+        .where((r) => _text(r['unique_id']) == fullGpid)
+        .toList();
+    if (matches.isEmpty) {
+      setState(() {
+        _fastGpidError = 'GPID not found in this Police Station.';
+        _selectedGpid = null;
+      });
+    } else {
+      setState(() {
+        _selectedGpid = fullGpid;
+        _fastGpidError = null;
+      });
+    }
   }
 
   Future<void> _startChecking() async {
@@ -338,18 +398,14 @@ class _GpidBasedCheckingScreenState
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => FestivityCheckScreen(
-          applicationId: gpid,
-        ),
+        builder: (_) => FestivityCheckScreen(applicationId: gpid),
       ),
     );
   }
 
   Widget _sectionLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 7,
-      ),
+      padding: const EdgeInsets.only(bottom: 7),
       child: Text(
         text,
         style: const TextStyle(
@@ -372,24 +428,15 @@ class _GpidBasedCheckingScreenState
         _sectionLabel(label),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 15,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFCBD5E1),
-            ),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 19,
-                color: const Color(0xFF64748B),
-              ),
+              Icon(icon, size: 19, color: const Color(0xFF64748B)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -402,10 +449,7 @@ class _GpidBasedCheckingScreenState
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE2E8F0),
                   borderRadius: BorderRadius.circular(6),
@@ -427,6 +471,131 @@ class _GpidBasedCheckingScreenState
     );
   }
 
+  Widget _fastGpidEntryBox() {
+    final prefix = _derivedGpidPrefix;
+
+    if (prefix == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel('Fast GPID Entry'),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFECACA)),
+            ),
+            child: const Text(
+              'GPID code is unavailable for the selected Police Station.',
+              style: TextStyle(color: Color(0xFF991B1B), fontSize: 13),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Fast GPID Entry'),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
+                      prefix,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _gpidController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      maxLength: 4,
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: '4 digits',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _fastGpidError = null;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              if (_fastGpidError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _fastGpidError!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: RegExp(r'^\d{4}$').hasMatch(_gpidController.text)
+                      ? _findGpid
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF17365D),
+                    side: BorderSide(
+                      color: RegExp(r'^\d{4}$').hasMatch(_gpidController.text)
+                          ? const Color(0xFF17365D)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text(
+                    'FIND GPID',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _dropdownBox({
     required String label,
     required String hint,
@@ -435,8 +604,9 @@ class _GpidBasedCheckingScreenState
     required ValueChanged<String?> onChanged,
     bool enabled = true,
   }) {
-    final effectiveValue =
-        value != null && items.contains(value) ? value : null;
+    final effectiveValue = value != null && items.contains(value)
+        ? value
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -447,23 +617,18 @@ class _GpidBasedCheckingScreenState
           isExpanded: true,
           decoration: InputDecoration(
             filled: true,
-            fillColor:
-                enabled ? Colors.white : const Color(0xFFF8FAFC),
+            fillColor: enabled ? Colors.white : const Color(0xFFF8FAFC),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 14,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCBD5E1),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCBD5E1),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
             ),
           ),
           hint: Text(hint),
@@ -471,15 +636,11 @@ class _GpidBasedCheckingScreenState
               .map(
                 (item) => DropdownMenuItem<String>(
                   value: item,
-                  child: Text(
-                    item,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(item, overflow: TextOverflow.ellipsis),
                 ),
               )
               .toList(),
-          onChanged:
-              enabled && items.isNotEmpty ? onChanged : null,
+          onChanged: enabled && items.isNotEmpty ? onChanged : null,
         ),
       ],
     );
@@ -612,6 +773,29 @@ class _GpidBasedCheckingScreenState
     // 6. GPID Field
     if (_stationResolved) {
       children.add(const SizedBox(height: 14));
+      children.add(_fastGpidEntryBox());
+
+      children.add(const SizedBox(height: 14));
+      children.add(
+        const Row(
+          children: [
+            Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                'OR',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+          ],
+        ),
+      );
+      children.add(const SizedBox(height: 14));
 
       final gpids = _gpidRecords
           .map((record) => _text(record['unique_id']))
@@ -620,13 +804,18 @@ class _GpidBasedCheckingScreenState
 
       children.add(
         _dropdownBox(
-          label: 'GPID',
+          label: 'Select from List',
           hint: 'Select GPID',
           items: gpids,
           value: _selectedGpid,
           onChanged: (value) {
             setState(() {
               _selectedGpid = value;
+              if (value != null) {
+                // Clear the fast entry field since user picked from dropdown
+                _gpidController.clear();
+                _fastGpidError = null;
+              }
             });
           },
         ),
@@ -646,9 +835,7 @@ class _GpidBasedCheckingScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFCBD5E1),
-        ),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -671,26 +858,11 @@ class _GpidBasedCheckingScreenState
             ),
           ),
           const SizedBox(height: 9),
-          _detailRow(
-            'Organizer',
-            _display(record['name']),
-          ),
-          _detailRow(
-            'Association',
-            _display(record['association']),
-          ),
-          _detailRow(
-            'Police Station',
-            _display(record['ps_name']),
-          ),
-          _detailRow(
-            'Division',
-            _display(record['division_name']),
-          ),
-          _detailRow(
-            'Zone',
-            _display(record['zone_name']),
-          ),
+          _detailRow('Organizer', _display(record['name'])),
+          _detailRow('Association', _display(record['association'])),
+          _detailRow('Police Station', _display(record['ps_name'])),
+          _detailRow('Division', _display(record['division_name'])),
+          _detailRow('Zone', _display(record['zone_name'])),
         ],
       ),
     );
@@ -739,9 +911,7 @@ class _GpidBasedCheckingScreenState
         foregroundColor: Colors.white,
         title: const Text(
           'GPID Based Checking',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: ListView(
@@ -753,17 +923,12 @@ class _GpidBasedCheckingScreenState
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFFBFDBFE),
-              ),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.verified_user_outlined,
-                  color: Color(0xFF17365D),
-                ),
+                Icon(Icons.verified_user_outlined, color: Color(0xFF17365D)),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -790,10 +955,7 @@ class _GpidBasedCheckingScreenState
           const SizedBox(height: 6),
           Text(
             '${widget.records.length} accessible GPID records',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 16),
           _buildHierarchy(),
@@ -808,9 +970,7 @@ class _GpidBasedCheckingScreenState
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF17365D),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 15,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -818,9 +978,7 @@ class _GpidBasedCheckingScreenState
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text(
                   'START STAGE-3 CHECKING',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ),

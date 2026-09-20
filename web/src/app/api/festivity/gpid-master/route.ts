@@ -42,7 +42,7 @@ async function fetchPolicePortal(): Promise<unknown> {
 
   const timeout = setTimeout(() => {
     controller.abort();
-  }, 30000);
+  }, 60000);
 
   try {
     const response = await fetch(

@@ -619,3 +619,70 @@ model DailyOfficerTargetSummary {
   @@index([date, rangeName])
   @@index([date, status])
 }
+
+model ImmersionCheckVisit {
+  id String @id @default(cuid())
+
+  gpid          String
+  applicationId String?
+
+  // Checking officer snapshot
+  userId            String
+  officerEmployeeId String?
+  officerName       String
+  officerRank       String?
+  officerRole       String?
+
+  // Hierarchy snapshot
+  commissionerateCode String?
+  commissionerateName String?
+  rangeCode           String?
+  rangeName           String?
+  zoneCode            String?
+  zoneName            String?
+  divisionCode        String?
+  divisionName        String?
+  policeStationCode   String?
+  policeStationName   String?
+  sectorCode          String?
+  sectorName          String?
+  clusterCode         String?
+  clusterName         String?
+
+  // Immersion 6-Step Workflow Modules
+  preVerificationResult     Json? // Step 1
+  processionFormationResult Json? // Step 2
+  routeManagementResult     Json? // Step 3
+  trackingResult            Json? // Step 4
+  immersionPointResult      Json? // Step 5
+  finalConfirmationResult   Json? // Step 6
+
+  // Overall status
+  status      String @default("IN_PROGRESS") // "IN_PROGRESS" | "COMPLETED"
+  currentStep Int    @default(0)
+
+  // GPS for final confirmation
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+
+  // Source/session
+  checkSource     String?
+  userSessionId   String?
+  deviceSessionId String?
+
+  // Timing
+  checkStartedAt DateTime?
+  checkedAt      DateTime  @default(now())
+  submittedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([gpid])
+  @@index([gpid, checkedAt])
+  @@index([userId, checkedAt])
+  @@index([gpid, userId, status])
+  @@index([policeStationCode])
+  @@index([divisionCode])
+  @@index([zoneCode])
+  @@index([status])
+}

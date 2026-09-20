@@ -86,10 +86,7 @@ class ImmersionApiService {
           } catch (_) {}
         }
 
-        // Mock mode fallback for smooth UI testing if endpoint doesn't exist
-        print('ImmersionAPI Warning: $message');
-        print('Mocking successful submission for UI testing...');
-        return {'success': true, 'mocked': true};
+        throw Exception(message);
       }
 
       final dynamic decoded = jsonDecode(response.body);
@@ -108,10 +105,8 @@ class ImmersionApiService {
         'Immersion submission timed out. Please check the network and try again.',
       );
     } catch (e) {
-      // Mock mode fallback for smooth UI testing
-      print('ImmersionAPI Error: $e');
-      print('Mocking successful submission for UI testing...');
-      return {'success': true, 'mocked': true};
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred during submission.');
     }
   }
 
@@ -140,9 +135,7 @@ class ImmersionApiService {
       }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        // Mock fallback
-        print('Mocking successful final immersion completion...');
-        return {'success': true, 'mocked': true};
+        throw Exception('Failed to submit final immersion step. Status code: ${response.statusCode}');
       }
 
       final dynamic decoded = jsonDecode(response.body);
@@ -151,8 +144,8 @@ class ImmersionApiService {
       }
       return Map<String, dynamic>.from(decoded as Map);
     } catch (e) {
-      print('Mocking successful final immersion completion (Exception: $e)...');
-      return {'success': true, 'mocked': true};
+      if (e is Exception) rethrow;
+      throw Exception('An unexpected error occurred during final completion.');
     }
   }
 }

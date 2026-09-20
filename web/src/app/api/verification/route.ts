@@ -457,6 +457,12 @@ function hasRecordAccess(
     return false;
   }
 
+  const userPrimaryPS = normalizeAccessName(user.policeStationName);
+
+  if (userPrimaryPS.length > 0 && userPrimaryPS === recordPoliceStation) {
+    return true;
+  }
+
   return user
     .policeStationAccesses
     .some(

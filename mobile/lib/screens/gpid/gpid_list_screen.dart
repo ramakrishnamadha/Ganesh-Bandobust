@@ -30,10 +30,20 @@ class _GpidListScreenState extends State<GpidListScreen> {
   String? selectedDivision;
   String? selectedPs;
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = '';
+  String _searchFilter = 'GPID'; // GPID, Phone No., Applicant Name
+
   @override
   void initState() {
     super.initState();
     _futureRecords = _loadRecords();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _loadRecords() async {
@@ -141,6 +151,28 @@ class _GpidListScreenState extends State<GpidListScreen> {
     if (selectedPs != null) {
       records = records.where((e) => _text(e['ps_name']) == selectedPs).toList();
     }
+
+    // Apply search filter
+    final query = _searchText.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      records = records.where((record) {
+        switch (_searchFilter) {
+          case 'GPID':
+            final gpid = _text(record['unique_id']).toLowerCase();
+            // Search by last 4 digits or full GPID
+            return gpid.contains(query) || gpid.endsWith(query);
+          case 'Phone No.':
+            final mobile = _text(record['mobile_no']).toLowerCase();
+            return mobile.contains(query);
+          case 'Applicant Name':
+            final name = _text(record['name']).toLowerCase();
+            return name.contains(query);
+          default:
+            return false;
+        }
+      }).toList();
+    }
+
     return records;
   }
 
@@ -311,9 +343,11 @@ class _GpidListScreenState extends State<GpidListScreen> {
     final pss = availablePss;
     final isAdmin = widget.user.role.toLowerCase() == 'admin' || widget.user.accessLevel >= 8;
 
-    if (!isAdmin && ranges.length <= 1 && zones.length <= 1 && divs.length <= 1 && pss.length <= 1) {
-      return const SizedBox.shrink();
-    }
+    final showJurisdictionFilters = isAdmin ||
+        ranges.length > 1 ||
+        zones.length > 1 ||
+        divs.length > 1 ||
+        pss.length > 1;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -321,95 +355,183 @@ class _GpidListScreenState extends State<GpidListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Filter by Jurisdiction',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF17365D)),
-          ),
-          const SizedBox(height: 8),
-          if (ranges.length > 1 || (isAdmin && ranges.isNotEmpty)) ...[
-            DropdownButtonFormField<String>(
-              value: selectedRange,
-              decoration: const InputDecoration(
-                labelText: 'Select Range',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Ranges')),
-                ...ranges.map((e) => DropdownMenuItem(value: e, child: Text(e))),
-              ],
-              onChanged: (val) {
-                setState(() {
-                  selectedRange = val;
-                  selectedZone = null;
-                  selectedDivision = null;
-                  selectedPs = null;
-                });
-              },
+          // Search Bar Section
+          if (selectedPs != null) ...[
+            const Text(
+              'Search GPIDs',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF17365D)),
             ),
             const SizedBox(height: 8),
-          ],
-          if (zones.length > 1 || (isAdmin && zones.isNotEmpty)) ...[
-            DropdownButtonFormField<String>(
-              value: selectedZone,
-              decoration: const InputDecoration(
-                labelText: 'Select Zone',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Zones')),
-                ...zones.map((e) => DropdownMenuItem(value: e, child: Text(e))),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: DropdownButtonFormField<String>(
+                    value: _searchFilter,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Search By',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'GPID', child: Text('GPID (Last 4 digits)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'Phone No.', child: Text('Phone No.', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'Applicant Name', child: Text('Applicant Name', overflow: TextOverflow.ellipsis)),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _searchFilter = val;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 5,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchText = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: _searchFilter == 'GPID'
+                          ? 'Enter last 4 digits of GPID'
+                          : _searchFilter == 'Phone No.'
+                              ? 'Enter phone number'
+                              : 'Enter applicant name',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchText.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchText = '';
+                                });
+                              },
+                            ),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      isDense: true,
+                    ),
+                  ),
+                ),
               ],
-              onChanged: (val) {
-                setState(() {
-                  selectedZone = val;
-                  selectedDivision = null;
-                  selectedPs = null;
-                });
-              },
+            ),
+            if (_searchText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Showing filtered results for "$_searchFilter: $_searchText"',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+          ],
+          // Jurisdiction Filters Section
+          if (showJurisdictionFilters) ...[
+            const Text(
+              'Filter by Jurisdiction',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF17365D)),
             ),
             const SizedBox(height: 8),
-          ],
-          if (divs.length > 1 || (isAdmin && divs.isNotEmpty)) ...[
-            DropdownButtonFormField<String>(
-              value: selectedDivision,
-              decoration: const InputDecoration(
-                labelText: 'Select Division',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            if (ranges.length > 1 || (isAdmin && ranges.isNotEmpty)) ...[
+              DropdownButtonFormField<String>(
+                value: selectedRange,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Select Range',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Ranges', overflow: TextOverflow.ellipsis)),
+                  ...ranges.map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    selectedRange = val;
+                    selectedZone = null;
+                    selectedDivision = null;
+                    selectedPs = null;
+                  });
+                },
               ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Divisions')),
-                ...divs.map((e) => DropdownMenuItem(value: e, child: Text(e))),
-              ],
-              onChanged: (val) {
-                setState(() {
-                  selectedDivision = val;
-                  selectedPs = null;
-                });
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (pss.length > 1 || (isAdmin && pss.isNotEmpty)) ...[
-            DropdownButtonFormField<String>(
-              value: selectedPs,
-              decoration: const InputDecoration(
-                labelText: 'Select Police Station',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const SizedBox(height: 8),
+            ],
+            if (zones.length > 1 || (isAdmin && zones.isNotEmpty)) ...[
+              DropdownButtonFormField<String>(
+                value: selectedZone,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Select Zone',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Zones', overflow: TextOverflow.ellipsis)),
+                  ...zones.map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    selectedZone = val;
+                    selectedDivision = null;
+                    selectedPs = null;
+                  });
+                },
               ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Police Stations')),
-                ...pss.map((e) => DropdownMenuItem(value: e, child: Text(e))),
-              ],
-              onChanged: (val) {
-                setState(() {
-                  selectedPs = val;
-                });
-              },
-            ),
+              const SizedBox(height: 8),
+            ],
+            if (divs.length > 1 || (isAdmin && divs.isNotEmpty)) ...[
+              DropdownButtonFormField<String>(
+                value: selectedDivision,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Select Division',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Divisions', overflow: TextOverflow.ellipsis)),
+                  ...divs.map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    selectedDivision = val;
+                    selectedPs = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (pss.length > 1 || (isAdmin && pss.isNotEmpty)) ...[
+              DropdownButtonFormField<String>(
+                value: selectedPs,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Select Police Station',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Police Stations', overflow: TextOverflow.ellipsis)),
+                  ...pss.map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    selectedPs = val;
+                  });
+                },
+              ),
+            ],
           ],
         ],
       ),

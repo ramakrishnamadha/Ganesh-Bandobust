@@ -29,6 +29,19 @@ class _GpidBasedCheckingScreenState
   static const String southRange = 'South Range';
   static const String northRange = 'North Range';
 
+  late final Map<String, List<Map<String, dynamic>>> _recordsByRange;
+  late final Map<String, List<Map<String, dynamic>>> _recordsByRangeZone;
+  late final Map<String, List<Map<String, dynamic>>>
+      _recordsByRangeZoneDivision;
+  late final Map<String, List<Map<String, dynamic>>>
+      _recordsByRangeZoneDivisionStation;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareHierarchyIndex();
+  }
+
   String _text(dynamic value) {
     if (value == null) {
       return '';
@@ -56,13 +69,6 @@ class _GpidBasedCheckingScreenState
         .trim();
   }
 
-  bool _same(dynamic left, dynamic right) {
-    final a = _normalize(left);
-    final b = _normalize(right);
-
-    return a.isNotEmpty && a == b;
-  }
-
   String _zoneKey(dynamic value) {
     return _text(value)
         .toLowerCase()
@@ -83,6 +89,77 @@ class _GpidBasedCheckingScreenState
         return northRange;
       default:
         return null;
+    }
+  }
+
+  String _key2(dynamic a, dynamic b) =>
+      '${_normalize(a)}|${_normalize(b)}';
+
+  String _key3(dynamic a, dynamic b, dynamic c) =>
+      '${_normalize(a)}|${_normalize(b)}|${_normalize(c)}';
+
+  String _key4(dynamic a, dynamic b, dynamic c, dynamic d) =>
+      '${_normalize(a)}|${_normalize(b)}|${_normalize(c)}|${_normalize(d)}';
+
+  void _addIndexedRecord(
+    Map<String, List<Map<String, dynamic>>> index,
+    String key,
+    Map<String, dynamic> record,
+  ) {
+    index.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(record);
+  }
+
+  void _prepareHierarchyIndex() {
+    _recordsByRange = <String, List<Map<String, dynamic>>>{};
+    _recordsByRangeZone = <String, List<Map<String, dynamic>>>{};
+    _recordsByRangeZoneDivision =
+        <String, List<Map<String, dynamic>>>{};
+    _recordsByRangeZoneDivisionStation =
+        <String, List<Map<String, dynamic>>>{};
+
+    for (final record in widget.records) {
+      final range = _rangeForZone(record['zone_name']);
+      final zone = _text(record['zone_name']);
+      final division = _text(record['division_name']);
+      final policeStation = _text(record['ps_name']);
+
+      if (range == null || zone.isEmpty) {
+        continue;
+      }
+
+      _addIndexedRecord(
+        _recordsByRange,
+        _normalize(range),
+        record,
+      );
+
+      final rangeZoneKey = _key2(range, zone);
+      _addIndexedRecord(
+        _recordsByRangeZone,
+        rangeZoneKey,
+        record,
+      );
+
+      if (division.isEmpty) {
+        continue;
+      }
+
+      final rangeZoneDivisionKey = _key3(range, zone, division);
+      _addIndexedRecord(
+        _recordsByRangeZoneDivision,
+        rangeZoneDivisionKey,
+        record,
+      );
+
+      if (policeStation.isEmpty) {
+        continue;
+      }
+
+      _addIndexedRecord(
+        _recordsByRangeZoneDivisionStation,
+        _key4(range, zone, division, policeStation),
+        record,
+      );
     }
   }
 
@@ -137,66 +214,84 @@ class _GpidBasedCheckingScreenState
     return '';
   }
 
-  List<Map<String, dynamic>> get _rangeRecords {
-    final range = _fixedRange.isNotEmpty
-        ? _fixedRange
-        : _selectedRange;
+  String? get _effectiveRange =>
+      _fixedRange.isNotEmpty ? _fixedRange : _selectedRange;
 
+  String? get _effectiveZone =>
+      _fixedZone.isNotEmpty ? _fixedZone : _selectedZone;
+
+  String? get _effectiveDivision =>
+      _fixedDivision.isNotEmpty ? _fixedDivision : _selectedDivision;
+
+  String? get _effectivePoliceStation => _fixedPoliceStation.isNotEmpty
+      ? _fixedPoliceStation
+      : _selectedPoliceStation;
+
+  List<Map<String, dynamic>> get _rangeRecords {
+    final range = _effectiveRange;
     if (range == null || range.isEmpty) {
-      return widget.records;
+      return const <Map<String, dynamic>>[];
     }
 
-    return widget.records.where((record) {
-      final recordRange = _rangeForZone(record['zone_name']);
-      return recordRange != null && _same(recordRange, range);
-    }).toList();
+    return _recordsByRange[_normalize(range)] ??
+        const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> get _zoneRecords {
-    final zone = _fixedZone.isNotEmpty
-        ? _fixedZone
-        : _selectedZone;
+    final range = _effectiveRange;
+    final zone = _effectiveZone;
 
-    if (zone == null || zone.isEmpty) {
-      return _rangeRecords;
+    if (range == null || range.isEmpty || zone == null || zone.isEmpty) {
+      return const <Map<String, dynamic>>[];
     }
 
-    return _rangeRecords.where(
-      (record) => _same(record['zone_name'], zone),
-    ).toList();
+    return _recordsByRangeZone[_key2(range, zone)] ??
+        const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> get _divisionRecords {
-    final division = _fixedDivision.isNotEmpty
-        ? _fixedDivision
-        : _selectedDivision;
+    final range = _effectiveRange;
+    final zone = _effectiveZone;
+    final division = _effectiveDivision;
 
-    if (division == null || division.isEmpty) {
-      return _zoneRecords;
+    if (range == null ||
+        range.isEmpty ||
+        zone == null ||
+        zone.isEmpty ||
+        division == null ||
+        division.isEmpty) {
+      return const <Map<String, dynamic>>[];
     }
 
-    return _zoneRecords.where(
-      (record) => _same(record['division_name'], division),
-    ).toList();
+    return _recordsByRangeZoneDivision[
+            _key3(range, zone, division)] ??
+        const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> get _stationRecords {
-    final policeStation = _fixedPoliceStation.isNotEmpty
-        ? _fixedPoliceStation
-        : _selectedPoliceStation;
+    final range = _effectiveRange;
+    final zone = _effectiveZone;
+    final division = _effectiveDivision;
+    final policeStation = _effectivePoliceStation;
 
-    if (policeStation == null || policeStation.isEmpty) {
-      return _divisionRecords;
+    if (range == null ||
+        range.isEmpty ||
+        zone == null ||
+        zone.isEmpty ||
+        division == null ||
+        division.isEmpty ||
+        policeStation == null ||
+        policeStation.isEmpty) {
+      return const <Map<String, dynamic>>[];
     }
 
-    return _divisionRecords.where(
-      (record) => _same(record['ps_name'], policeStation),
-    ).toList();
+    return _recordsByRangeZoneDivisionStation[
+            _key4(range, zone, division, policeStation)] ??
+        const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> get _gpidRecords {
-    final records =
-        List<Map<String, dynamic>>.from(_stationRecords);
+    final records = List<Map<String, dynamic>>.from(_stationRecords);
 
     records.sort(
       (a, b) => _text(a['unique_id']).compareTo(
@@ -224,31 +319,25 @@ class _GpidBasedCheckingScreenState
   }
 
   bool get _rangeResolved =>
-      _fixedRange.isNotEmpty || _selectedRange != null;
+      _effectiveRange != null && _effectiveRange!.isNotEmpty;
 
   bool get _zoneResolved =>
-      _fixedZone.isNotEmpty || _selectedZone != null;
+      _effectiveZone != null && _effectiveZone!.isNotEmpty;
 
   bool get _divisionResolved =>
-      _fixedDivision.isNotEmpty || _selectedDivision != null;
+      _effectiveDivision != null && _effectiveDivision!.isNotEmpty;
 
-  bool get _stationResolved =>
-      _fixedPoliceStation.isNotEmpty ||
-      _selectedPoliceStation != null;
+  bool get _stationResolved => _effectivePoliceStation != null &&
+      _effectivePoliceStation!.isNotEmpty;
 
   List<String> get _ranges {
-    final availableRanges = widget.records
-        .map((record) => _rangeForZone(record['zone_name']))
-        .whereType<String>()
-        .toSet();
-
     final ranges = <String>[];
 
-    if (availableRanges.contains(southRange)) {
+    if (_recordsByRange.containsKey(_normalize(southRange))) {
       ranges.add(southRange);
     }
 
-    if (availableRanges.contains(northRange)) {
+    if (_recordsByRange.containsKey(_normalize(northRange))) {
       ranges.add(northRange);
     }
 
@@ -256,13 +345,21 @@ class _GpidBasedCheckingScreenState
   }
 
   List<String> get _zones =>
-      _unique(_rangeRecords, 'zone_name');
+      _rangeResolved ? _unique(_rangeRecords, 'zone_name') : <String>[];
 
   List<String> get _divisions =>
-      _unique(_zoneRecords, 'division_name');
+      _zoneResolved ? _unique(_zoneRecords, 'division_name') : <String>[];
 
-  List<String> get _policeStations =>
-      _unique(_divisionRecords, 'ps_name');
+  List<String> get _policeStations => _divisionResolved
+      ? _unique(_divisionRecords, 'ps_name')
+      : <String>[];
+
+  List<String> get _gpids => _stationResolved
+      ? _gpidRecords
+          .map((record) => _text(record['unique_id']))
+          .where((gpid) => gpid.isNotEmpty)
+          .toList()
+      : <String>[];
 
   void _changeRange(String? value) {
     setState(() {
@@ -323,9 +420,7 @@ class _GpidBasedCheckingScreenState
 
   Widget _sectionLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 7,
-      ),
+      padding: const EdgeInsets.only(bottom: 7),
       child: Text(
         text,
         style: const TextStyle(
@@ -355,17 +450,11 @@ class _GpidBasedCheckingScreenState
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFCBD5E1),
-            ),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 19,
-                color: const Color(0xFF64748B),
-              ),
+              Icon(icon, size: 19, color: const Color(0xFF64748B)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -408,6 +497,9 @@ class _GpidBasedCheckingScreenState
       children: [
         _sectionLabel(label),
         DropdownButtonFormField<String>(
+          key: ValueKey<String>(
+            '$label|${effectiveValue ?? ''}|${items.join('~')}|$enabled',
+          ),
           initialValue: effectiveValue,
           isExpanded: true,
           decoration: InputDecoration(
@@ -420,15 +512,11 @@ class _GpidBasedCheckingScreenState
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCBD5E1),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCBD5E1),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
             ),
           ),
           hint: Text(hint),
@@ -436,15 +524,11 @@ class _GpidBasedCheckingScreenState
               .map(
                 (item) => DropdownMenuItem<String>(
                   value: item,
-                  child: Text(
-                    item,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(item, overflow: TextOverflow.ellipsis),
                 ),
               )
               .toList(),
-          onChanged:
-              enabled && items.isNotEmpty ? onChanged : null,
+          onChanged: enabled && items.isNotEmpty ? onChanged : null,
         ),
       ],
     );
@@ -453,6 +537,7 @@ class _GpidBasedCheckingScreenState
   Widget _buildHierarchy() {
     final children = <Widget>[];
 
+    // 1. RANGE - always visible.
     if (_fixedRange.isNotEmpty) {
       children.add(
         _readOnlyBox(
@@ -473,79 +558,81 @@ class _GpidBasedCheckingScreenState
       );
     }
 
-    if (_rangeResolved) {
-      children.add(const SizedBox(height: 14));
+    children.add(const SizedBox(height: 14));
 
-      if (_fixedZone.isNotEmpty) {
-        children.add(
-          _readOnlyBox(
-            label: 'Zone',
-            value: _fixedZone,
-            icon: Icons.location_city_outlined,
-          ),
-        );
-      } else {
-        children.add(
-          _dropdownBox(
-            label: 'Zone',
-            hint: 'Select Zone',
-            items: _zones,
-            value: _selectedZone,
-            onChanged: _changeZone,
-          ),
-        );
-      }
+    // 2. ZONE - always visible; enabled after Range is resolved.
+    if (_fixedZone.isNotEmpty) {
+      children.add(
+        _readOnlyBox(
+          label: 'Zone',
+          value: _fixedZone,
+          icon: Icons.location_city_outlined,
+        ),
+      );
+    } else {
+      children.add(
+        _dropdownBox(
+          label: 'Zone',
+          hint: _rangeResolved ? 'Select Zone' : 'Select Range first',
+          items: _zones,
+          value: _selectedZone,
+          onChanged: _changeZone,
+          enabled: _rangeResolved,
+        ),
+      );
     }
 
-    if (_zoneResolved) {
-      children.add(const SizedBox(height: 14));
+    children.add(const SizedBox(height: 14));
 
-      if (_fixedDivision.isNotEmpty) {
-        children.add(
-          _readOnlyBox(
-            label: 'Division',
-            value: _fixedDivision,
-            icon: Icons.account_tree_outlined,
-          ),
-        );
-      } else {
-        children.add(
-          _dropdownBox(
-            label: 'Division',
-            hint: 'Select Division',
-            items: _divisions,
-            value: _selectedDivision,
-            onChanged: _changeDivision,
-          ),
-        );
-      }
+    // 3. DIVISION - always visible; enabled after Zone is resolved.
+    if (_fixedDivision.isNotEmpty) {
+      children.add(
+        _readOnlyBox(
+          label: 'Division',
+          value: _fixedDivision,
+          icon: Icons.account_tree_outlined,
+        ),
+      );
+    } else {
+      children.add(
+        _dropdownBox(
+          label: 'Division',
+          hint: _zoneResolved ? 'Select Division' : 'Select Zone first',
+          items: _divisions,
+          value: _selectedDivision,
+          onChanged: _changeDivision,
+          enabled: _zoneResolved,
+        ),
+      );
     }
 
-    if (_divisionResolved) {
-      children.add(const SizedBox(height: 14));
+    children.add(const SizedBox(height: 14));
 
-      if (_fixedPoliceStation.isNotEmpty) {
-        children.add(
-          _readOnlyBox(
-            label: 'Police Station',
-            value: _fixedPoliceStation,
-            icon: Icons.local_police_outlined,
-          ),
-        );
-      } else {
-        children.add(
-          _dropdownBox(
-            label: 'Police Station',
-            hint: 'Select Police Station',
-            items: _policeStations,
-            value: _selectedPoliceStation,
-            onChanged: _changePoliceStation,
-          ),
-        );
-      }
+    // 4. POLICE STATION - always visible; enabled after Division is resolved.
+    if (_fixedPoliceStation.isNotEmpty) {
+      children.add(
+        _readOnlyBox(
+          label: 'Police Station',
+          value: _fixedPoliceStation,
+          icon: Icons.local_police_outlined,
+        ),
+      );
+    } else {
+      children.add(
+        _dropdownBox(
+          label: 'Police Station',
+          hint: _divisionResolved
+              ? 'Select Police Station'
+              : 'Select Division first',
+          items: _policeStations,
+          value: _selectedPoliceStation,
+          onChanged: _changePoliceStation,
+          enabled: _divisionResolved,
+        ),
+      );
     }
 
-    if (_stationResolved && _fixedSector.isNotEmpty) {
+    if (_fixedSector.isNotEmpty) {
       children.add(const SizedBox(height: 14));
       children.add(
         _readOnlyBox(
@@ -569,28 +656,25 @@ class _GpidBasedCheckingScreenState
       );
     }
 
-    if (_stationResolved) {
-      children.add(const SizedBox(height: 14));
+    children.add(const SizedBox(height: 14));
 
-      final gpids = _gpidRecords
-          .map((record) => _text(record['unique_id']))
-          .where((gpid) => gpid.isNotEmpty)
-          .toList();
-
-      children.add(
-        _dropdownBox(
-          label: 'GPID',
-          hint: 'Select GPID',
-          items: gpids,
-          value: _selectedGpid,
-          onChanged: (value) {
-            setState(() {
-              _selectedGpid = value;
-            });
-          },
-        ),
-      );
-    }
+    // 5. GPID / MANDAP - always visible; enabled after PS is resolved.
+    children.add(
+      _dropdownBox(
+        label: 'GPID / Mandap',
+        hint: _stationResolved
+            ? 'Select GPID / Mandap'
+            : 'Select Police Station first',
+        items: _gpids,
+        value: _selectedGpid,
+        enabled: _stationResolved,
+        onChanged: (value) {
+          setState(() {
+            _selectedGpid = value;
+          });
+        },
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

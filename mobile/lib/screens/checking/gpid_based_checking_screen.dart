@@ -26,6 +26,10 @@ class _GpidBasedCheckingScreenState
   String? _selectedPoliceStation;
   String? _selectedGpid;
 
+  final TextEditingController _gpidSearchController =
+      TextEditingController();
+  String _gpidSearchText = '';
+
   static const String southRange = 'South Range';
   static const String northRange = 'North Range';
 
@@ -40,6 +44,12 @@ class _GpidBasedCheckingScreenState
   void initState() {
     super.initState();
     _prepareHierarchyIndex();
+  }
+
+  @override
+  void dispose() {
+    _gpidSearchController.dispose();
+    super.dispose();
   }
 
   String _text(dynamic value) {
@@ -361,13 +371,61 @@ class _GpidBasedCheckingScreenState
           .toList()
       : <String>[];
 
+  List<String> get _filteredGpids {
+    final gpids = _gpids;
+    final query = _gpidSearchText.trim().toLowerCase();
+
+    if (query.isEmpty) {
+      return gpids;
+    }
+
+    // Last-four-character search is the primary use case.
+    // If there are suffix matches, show those first/only.
+    final suffixMatches = gpids
+        .where((gpid) => gpid.toLowerCase().endsWith(query))
+        .toList();
+
+    if (suffixMatches.isNotEmpty) {
+      return suffixMatches;
+    }
+
+    // Also support full or partial GPID text if required.
+    return gpids
+        .where((gpid) => gpid.toLowerCase().contains(query))
+        .toList();
+  }
+
+  void _resetGpidSearchAndSelection() {
+    _selectedGpid = null;
+    _gpidSearchText = '';
+    _gpidSearchController.clear();
+  }
+
+  void _changeGpidSearch(String value) {
+    setState(() {
+      _gpidSearchText = value;
+
+      if (_selectedGpid != null &&
+          !_filteredGpids.contains(_selectedGpid)) {
+        _selectedGpid = null;
+      }
+    });
+  }
+
+  void _clearGpidSearch() {
+    setState(() {
+      _gpidSearchController.clear();
+      _gpidSearchText = '';
+    });
+  }
+
   void _changeRange(String? value) {
     setState(() {
       _selectedRange = value;
       _selectedZone = null;
       _selectedDivision = null;
       _selectedPoliceStation = null;
-      _selectedGpid = null;
+      _resetGpidSearchAndSelection();
     });
   }
 
@@ -376,7 +434,7 @@ class _GpidBasedCheckingScreenState
       _selectedZone = value;
       _selectedDivision = null;
       _selectedPoliceStation = null;
-      _selectedGpid = null;
+      _resetGpidSearchAndSelection();
     });
   }
 
@@ -384,14 +442,14 @@ class _GpidBasedCheckingScreenState
     setState(() {
       _selectedDivision = value;
       _selectedPoliceStation = null;
-      _selectedGpid = null;
+      _resetGpidSearchAndSelection();
     });
   }
 
   void _changePoliceStation(String? value) {
     setState(() {
       _selectedPoliceStation = value;
-      _selectedGpid = null;
+      _resetGpidSearchAndSelection();
     });
   }
 
@@ -534,6 +592,69 @@ class _GpidBasedCheckingScreenState
     );
   }
 
+  Widget _gpidSearchBox() {
+    final enabled = _stationResolved;
+    final matchCount = _filteredGpids.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Search GPID / Mandap'),
+        TextField(
+          controller: _gpidSearchController,
+          enabled: enabled,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor:
+                enabled ? Colors.white : const Color(0xFFF8FAFC),
+            hintText: enabled
+                ? 'Enter last 4 characters, e.g. 0144'
+                : 'Select Police Station first',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: enabled && _gpidSearchText.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: _clearGpidSearch,
+                    icon: const Icon(Icons.clear),
+                  )
+                : null,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFCBD5E1),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFCBD5E1),
+              ),
+            ),
+          ),
+          onChanged: enabled ? _changeGpidSearch : null,
+        ),
+        if (enabled && _gpidSearchText.trim().isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(
+            matchCount == 1
+                ? '1 matching GPID'
+                : '$matchCount matching GPIDs',
+            style: const TextStyle(
+              fontSize: 10,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildHierarchy() {
     final children = <Widget>[];
 
@@ -658,16 +779,25 @@ class _GpidBasedCheckingScreenState
 
     children.add(const SizedBox(height: 14));
 
-    // 5. GPID / MANDAP - always visible; enabled after PS is resolved.
+    // Quick GPID search - enabled after Police Station is resolved.
+    children.add(_gpidSearchBox());
+
+    children.add(const SizedBox(height: 14));
+
+    // 5. GPID / MANDAP - always visible; filtered by the search above.
     children.add(
       _dropdownBox(
         label: 'GPID / Mandap',
         hint: _stationResolved
-            ? 'Select GPID / Mandap'
+            ? (_gpidSearchText.trim().isEmpty
+                ? 'Select GPID / Mandap'
+                : (_filteredGpids.isEmpty
+                    ? 'No matching GPID'
+                    : 'Select matching GPID / Mandap'))
             : 'Select Police Station first',
-        items: _gpids,
+        items: _filteredGpids,
         value: _selectedGpid,
-        enabled: _stationResolved,
+        enabled: _stationResolved && _filteredGpids.isNotEmpty,
         onChanged: (value) {
           setState(() {
             _selectedGpid = value;

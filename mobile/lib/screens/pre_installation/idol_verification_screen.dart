@@ -1,9 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-
-import '../measurement/ar_measurement_screen.dart';
-import '../../models/ar_measurement_result.dart';
 
 class IdolVerificationScreen extends StatefulWidget {
   final String applicationId;
@@ -32,24 +27,6 @@ class _IdolVerificationScreenState
       TextEditingController();
 
   String material = '';
-
-  String heightMeasurementMethod = '';
-  String widthMeasurementMethod = '';
-
-  String? heightEvidenceImagePath;
-  String? widthEvidenceImagePath;
-
-  double? heightLatitude;
-  double? heightLongitude;
-  double? heightGpsAccuracy;
-
-  double? widthLatitude;
-  double? widthLongitude;
-  double? widthGpsAccuracy;
-
-  DateTime? heightMeasuredAt;
-  DateTime? widthMeasuredAt;
-
   String remarks = '';
 
   String errorMessage = '';
@@ -60,85 +37,6 @@ class _IdolVerificationScreenState
     heightController.dispose();
     widthController.dispose();
     super.dispose();
-  }
-
-  /* =========================================================
-     DIGITAL AR MEASUREMENT
-  ========================================================= */
-
-  Future<void> openDigitalMeasurement(
-    String type,
-  ) async {
-    final result =
-        await Navigator.push<ArMeasurementResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ArMeasurementScreen(
-          applicationId: widget.applicationId,
-          measurementType: type,
-        ),
-      ),
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      if (type == 'HEIGHT') {
-        heightController.text =
-            result.valueFeet.toStringAsFixed(2);
-
-        heightMeasurementMethod =
-            result.measurementMethod;
-
-        heightEvidenceImagePath =
-            result.evidenceImagePath;
-
-        heightLatitude =
-            result.latitude;
-
-        heightLongitude =
-            result.longitude;
-
-        heightGpsAccuracy =
-            result.gpsAccuracy;
-
-        heightMeasuredAt =
-            result.measuredAt;
-      }
-
-      if (type == 'WIDTH') {
-        widthController.text =
-            result.valueFeet.toStringAsFixed(2);
-
-        widthMeasurementMethod =
-            result.measurementMethod;
-
-        widthEvidenceImagePath =
-            result.evidenceImagePath;
-
-        widthLatitude =
-            result.latitude;
-
-        widthLongitude =
-            result.longitude;
-
-        widthGpsAccuracy =
-            result.gpsAccuracy;
-
-        widthMeasuredAt =
-            result.measuredAt;
-      }
-
-      successMessage =
-          '$type digitally measured successfully: '
-          '${result.valueFeet.toStringAsFixed(2)} ft';
-    });
   }
 
   /* =========================================================
@@ -242,7 +140,7 @@ class _IdolVerificationScreenState
     if (heightController.text.trim().isEmpty) {
       setState(() {
         errorMessage =
-            'Please enter or digitally measure Idol Height.';
+            'Please enter the Actual Height of Idol during field visit.';
       });
 
       return;
@@ -251,7 +149,7 @@ class _IdolVerificationScreenState
     if (widthController.text.trim().isEmpty) {
       setState(() {
         errorMessage =
-            'Please enter or digitally measure Idol Width.';
+            'Please enter the Actual Width of Idol during field visit.';
       });
 
       return;
@@ -653,456 +551,73 @@ class _IdolVerificationScreenState
                         const SizedBox(
                             height: 20),
 
-                        /* =========================================
-                           AR MEASUREMENT
-                        ========================================= */
 
-                        Container(
-                          padding:
-                              const EdgeInsets
-                                  .all(16),
-
-                          decoration:
-                              BoxDecoration(
-                            color: const Color(
-                                0xFFEFF6FF),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(12),
-                            border: Border.all(
-                              color: const Color(
-                                  0xFFBFDBFE),
-                            ),
-                          ),
-
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .stretch,
-
-                            children: [
-                              const Text(
-                                'Digital AR Measurement',
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  color:
-                                      Color(
-                                          0xFF17365D),
-                                ),
-                              ),
-
-                              const SizedBox(
-                                  height: 5),
-
-                              const Text(
-                                'Use the mobile device camera and ARKit / ARCore to measure the Idol.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color:
-                                      Color(
-                                          0xFF475569),
-                                ),
-                              ),
-
-                              const SizedBox(
-                                  height: 14),
-
-                              FilledButton.icon(
-                                onPressed: () {
-                                  openDigitalMeasurement(
-                                    'HEIGHT',
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.height,
-                                ),
-                                label: const Text(
-                                  'Measure Height Digitally',
-                                ),
-                              ),
-
-                              const SizedBox(
-                                  height: 10),
-
-                              FilledButton.icon(
-                                onPressed: () {
-                                  openDigitalMeasurement(
-                                    'WIDTH',
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.swap_horiz,
-                                ),
-                                label: const Text(
-                                  'Measure Width Digitally',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(
-                            height: 18),
-
-                        /* HEIGHT */
+                        /* MANUAL FIELD MEASUREMENTS */
 
                         TextField(
-                          controller:
-                              heightController,
-
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
+                          controller: heightController,
+                          keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-
-                          onChanged: (value) {
-                            if (value
-                                .trim()
-                                .isNotEmpty) {
-                              setState(() {
-                                heightMeasurementMethod =
-                                    'MANUAL';
-                              });
-                            }
-                          },
-
-                          decoration:
-                              InputDecoration(
+                          decoration: const InputDecoration(
                             labelText:
-                                'Height (ft.) *',
-
-                            border:
-                                const OutlineInputBorder(),
-
-                            suffixIcon:
-                                heightMeasurementMethod ==
-                                        'AR_3D_HIT_TEST'
-                                    ? const Icon(
-                                        Icons
-                                            .verified,
-                                        color: Colors
-                                            .green,
-                                      )
-                                    : null,
+                                'Actual Height of Idol during field visit (ft.) *',
+                            hintText: 'Enter height manually',
+                            border: OutlineInputBorder(),
                           ),
                         ),
 
-                        if (heightMeasurementMethod
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                              height: 5),
-
-                          Text(
-                            'Measurement Method: $heightMeasurementMethod',
-                            style:
-                                const TextStyle(
-                              fontSize: 12,
-                              color: Color(
-                                  0xFF64748B),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(
-                            height: 16),
-
-                        /* WIDTH */
+                        const SizedBox(height: 16),
 
                         TextField(
-                          controller:
-                              widthController,
-
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
+                          controller: widthController,
+                          keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-
-                          onChanged: (value) {
-                            if (value
-                                .trim()
-                                .isNotEmpty) {
-                              setState(() {
-                                widthMeasurementMethod =
-                                    'MANUAL';
-                              });
-                            }
-                          },
-
-                          decoration:
-                              InputDecoration(
+                          decoration: const InputDecoration(
                             labelText:
-                                'Width (ft.) *',
-
-                            border:
-                                const OutlineInputBorder(),
-
-                            suffixIcon:
-                                widthMeasurementMethod ==
-                                        'AR_3D_HIT_TEST'
-                                    ? const Icon(
-                                        Icons
-                                            .verified,
-                                        color: Colors
-                                            .green,
-                                      )
-                                    : null,
+                                'Actual Width of Idol during field visit (ft.) *',
+                            hintText: 'Enter width manually',
+                            border: OutlineInputBorder(),
                           ),
                         ),
 
-                        if (widthMeasurementMethod
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                              height: 5),
+                        const SizedBox(height: 16),
 
-                          Text(
-                            'Measurement Method: $widthMeasurementMethod',
-                            style:
-                                const TextStyle(
-                              fontSize: 12,
-                              color: Color(
-                                  0xFF64748B),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(
-                            height: 16),
-
-                        /* MATERIAL */
-
-                        DropdownButtonFormField<
-                            String>(
+                        DropdownButtonFormField<String>(
                           initialValue:
-                              material.isEmpty
-                                  ? null
-                                  : material,
-
-                          decoration:
-                              const InputDecoration(
-                            labelText:
-                                'Material *',
-                            border:
-                                OutlineInputBorder(),
+                              material.isEmpty ? null : material,
+                          decoration: const InputDecoration(
+                            labelText: 'Material *',
+                            border: OutlineInputBorder(),
                           ),
-
                           items: const [
                             DropdownMenuItem(
                               value: 'CLAY',
-                              child:
-                                  Text('Clay'),
+                              child: Text('Clay'),
                             ),
-
                             DropdownMenuItem(
                               value: 'POP',
-                              child:
-                                  Text('POP'),
+                              child: Text('POP'),
                             ),
                           ],
-
                           onChanged: (value) {
                             setState(() {
-                              material =
-                                  value ?? '';
+                              material = value ?? '';
                             });
                           },
                         ),
 
-                        const SizedBox(
-                            height: 18),
+                        const SizedBox(height: 10),
 
-                        /* =========================================
-                           MEASUREMENT EVIDENCE
-                        ========================================= */
-
-                        Container(
-                          padding:
-                              const EdgeInsets
-                                  .all(14),
-
-                          decoration:
-                              BoxDecoration(
-                            color: const Color(
-                                0xFFF8FAFC),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(10),
-                            border: Border.all(
-                              color: const Color(
-                                  0xFFE2E8F0),
-                            ),
-                          ),
-
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .stretch,
-
-                            children: [
-                              const Text(
-                                'Measurement Evidence',
-                                style: TextStyle(
-                                  fontWeight:
-                                      FontWeight
-                                          .bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              if (heightEvidenceImagePath !=
-                                  null) ...[
-                                const Text(
-                                  'Height Evidence',
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                              10),
-
-                                  child: Image.file(
-                                    File(
-                                      heightEvidenceImagePath!,
-                                    ),
-
-                                    height: 220,
-                                    width:
-                                        double.infinity,
-                                    fit:
-                                        BoxFit.cover,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  'Height: ${heightController.text} ft',
-                                  style:
-                                      const TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                Text(
-                                  'Method: ${heightMeasurementMethod.isEmpty ? '-' : heightMeasurementMethod}',
-                                ),
-
-                                Text(
-                                  'GPS: '
-                                  '${heightLatitude?.toStringAsFixed(6) ?? '-'}, '
-                                  '${heightLongitude?.toStringAsFixed(6) ?? '-'}',
-                                ),
-
-                                Text(
-                                  'GPS Accuracy: '
-                                  '${heightGpsAccuracy == null ? '-' : '±${heightGpsAccuracy!.toStringAsFixed(1)} m'}',
-                                ),
-
-                                Text(
-                                  'Measured At: '
-                                  '${heightMeasuredAt?.toLocal().toString() ?? '-'}',
-                                ),
-
-                                const SizedBox(height: 18),
-                              ],
-
-                              if (widthEvidenceImagePath !=
-                                  null) ...[
-                                const Text(
-                                  'Width Evidence',
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                              10),
-
-                                  child: Image.file(
-                                    File(
-                                      widthEvidenceImagePath!,
-                                    ),
-
-                                    height: 220,
-                                    width:
-                                        double.infinity,
-                                    fit:
-                                        BoxFit.cover,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  'Width: ${widthController.text} ft',
-                                  style:
-                                      const TextStyle(
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-                                  ),
-                                ),
-
-                                Text(
-                                  'Method: ${widthMeasurementMethod.isEmpty ? '-' : widthMeasurementMethod}',
-                                ),
-
-                                Text(
-                                  'GPS: '
-                                  '${widthLatitude?.toStringAsFixed(6) ?? '-'}, '
-                                  '${widthLongitude?.toStringAsFixed(6) ?? '-'}',
-                                ),
-
-                                Text(
-                                  'GPS Accuracy: '
-                                  '${widthGpsAccuracy == null ? '-' : '±${widthGpsAccuracy!.toStringAsFixed(1)} m'}',
-                                ),
-
-                                Text(
-                                  'Measured At: '
-                                  '${widthMeasuredAt?.toLocal().toString() ?? '-'}',
-                                ),
-                              ],
-
-                              if (heightEvidenceImagePath ==
-                                      null &&
-                                  widthEvidenceImagePath ==
-                                      null)
-                                const Text(
-                                  'No AR measurement evidence captured yet.',
-                                  style: TextStyle(
-                                    color:
-                                        Color(
-                                            0xFF64748B),
-                                  ),
-                                ),
-                            ],
+                        const Text(
+                          'The height and width entered by the officer during the field visit will be treated as the final field measurements for future reference.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
                           ),
                         ),
                       ],
-
                       if (dimensionsVerified ==
                           'NO') ...[
                         const SizedBox(

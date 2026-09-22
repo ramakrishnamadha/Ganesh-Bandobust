@@ -20,10 +20,14 @@ class GpidBasedCheckingScreen extends StatefulWidget {
 
 class _GpidBasedCheckingScreenState
     extends State<GpidBasedCheckingScreen> {
+  String? _selectedRange;
   String? _selectedZone;
   String? _selectedDivision;
   String? _selectedPoliceStation;
   String? _selectedGpid;
+
+  static const String southRange = 'South Range';
+  static const String northRange = 'North Range';
 
   String _text(dynamic value) {
     if (value == null) {
@@ -57,6 +61,29 @@ class _GpidBasedCheckingScreenState
     final b = _normalize(right);
 
     return a.isNotEmpty && a == b;
+  }
+
+  String _zoneKey(dynamic value) {
+    return _text(value)
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  String? _rangeForZone(dynamic zoneName) {
+    switch (_zoneKey(zoneName)) {
+      case 'charminar':
+      case 'golconda':
+      case 'golkonda':
+      case 'rajendranagar':
+      case 'shamshabad':
+        return southRange;
+      case 'jubileehills':
+      case 'khairatabad':
+      case 'secunderabad':
+        return northRange;
+      default:
+        return null;
+    }
   }
 
   List<String> _unique(
@@ -97,8 +124,32 @@ class _GpidBasedCheckingScreenState
   }
 
   String get _fixedRange {
-    final value = widget.authenticatedUser.rangeName;
-    return _text(value);
+    final value = _text(widget.authenticatedUser.rangeName);
+
+    if (value.isNotEmpty) {
+      return value;
+    }
+
+    if (_fixedZone.isNotEmpty) {
+      return _rangeForZone(_fixedZone) ?? '';
+    }
+
+    return '';
+  }
+
+  List<Map<String, dynamic>> get _rangeRecords {
+    final range = _fixedRange.isNotEmpty
+        ? _fixedRange
+        : _selectedRange;
+
+    if (range == null || range.isEmpty) {
+      return widget.records;
+    }
+
+    return widget.records.where((record) {
+      final recordRange = _rangeForZone(record['zone_name']);
+      return recordRange != null && _same(recordRange, range);
+    }).toList();
   }
 
   List<Map<String, dynamic>> get _zoneRecords {
@@ -107,10 +158,10 @@ class _GpidBasedCheckingScreenState
         : _selectedZone;
 
     if (zone == null || zone.isEmpty) {
-      return widget.records;
+      return _rangeRecords;
     }
 
-    return widget.records.where(
+    return _rangeRecords.where(
       (record) => _same(record['zone_name'], zone),
     ).toList();
   }
@@ -172,6 +223,9 @@ class _GpidBasedCheckingScreenState
     return null;
   }
 
+  bool get _rangeResolved =>
+      _fixedRange.isNotEmpty || _selectedRange != null;
+
   bool get _zoneResolved =>
       _fixedZone.isNotEmpty || _selectedZone != null;
 
@@ -182,14 +236,43 @@ class _GpidBasedCheckingScreenState
       _fixedPoliceStation.isNotEmpty ||
       _selectedPoliceStation != null;
 
+  List<String> get _ranges {
+    final availableRanges = widget.records
+        .map((record) => _rangeForZone(record['zone_name']))
+        .whereType<String>()
+        .toSet();
+
+    final ranges = <String>[];
+
+    if (availableRanges.contains(southRange)) {
+      ranges.add(southRange);
+    }
+
+    if (availableRanges.contains(northRange)) {
+      ranges.add(northRange);
+    }
+
+    return ranges;
+  }
+
   List<String> get _zones =>
-      _unique(widget.records, 'zone_name');
+      _unique(_rangeRecords, 'zone_name');
 
   List<String> get _divisions =>
       _unique(_zoneRecords, 'division_name');
 
   List<String> get _policeStations =>
       _unique(_divisionRecords, 'ps_name');
+
+  void _changeRange(String? value) {
+    setState(() {
+      _selectedRange = value;
+      _selectedZone = null;
+      _selectedDivision = null;
+      _selectedPoliceStation = null;
+      _selectedGpid = null;
+    });
+  }
 
   void _changeZone(String? value) {
     setState(() {
@@ -378,27 +461,40 @@ class _GpidBasedCheckingScreenState
           icon: Icons.account_balance_outlined,
         ),
       );
-      children.add(const SizedBox(height: 14));
-    }
-
-    if (_fixedZone.isNotEmpty) {
-      children.add(
-        _readOnlyBox(
-          label: 'Zone',
-          value: _fixedZone,
-          icon: Icons.location_city_outlined,
-        ),
-      );
     } else {
       children.add(
         _dropdownBox(
-          label: 'Zone',
-          hint: 'Select Zone',
-          items: _zones,
-          value: _selectedZone,
-          onChanged: _changeZone,
+          label: 'Range',
+          hint: 'Select Range',
+          items: _ranges,
+          value: _selectedRange,
+          onChanged: _changeRange,
         ),
       );
+    }
+
+    if (_rangeResolved) {
+      children.add(const SizedBox(height: 14));
+
+      if (_fixedZone.isNotEmpty) {
+        children.add(
+          _readOnlyBox(
+            label: 'Zone',
+            value: _fixedZone,
+            icon: Icons.location_city_outlined,
+          ),
+        );
+      } else {
+        children.add(
+          _dropdownBox(
+            label: 'Zone',
+            hint: 'Select Zone',
+            items: _zones,
+            value: _selectedZone,
+            onChanged: _changeZone,
+          ),
+        );
+      }
     }
 
     if (_zoneResolved) {
